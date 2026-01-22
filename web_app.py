@@ -109,7 +109,7 @@ with c2:
 resultado = df.copy()
 
 if st.session_state.proyecto != "Todos":
-    resultado = resultado[resultado["DESC PROGRAMA"] == st.session_state.proyecto]
+    resultado = resultado[resultado["DESC PROYECTO"] == st.session_state.proyecto]
 
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
@@ -205,6 +205,7 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
 
 
 
