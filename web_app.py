@@ -85,6 +85,8 @@ with c4:
             st.session_state[k] = ""
         st.rerun()
 
+st.write("Columnas disponibles:", df.columns.tolist())
+
 # ================= FILTRADO =================
 resultado = df.copy()
 
@@ -155,6 +157,7 @@ st.download_button(
     convertir_excel(tabla),
     file_name="resultados_contratos.xlsx"
 )
+
 
 
 
