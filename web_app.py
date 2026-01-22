@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from io import BytesIO
 
 # ================= CONFIGURACIÓN =================
 st.set_page_config(
@@ -10,21 +9,20 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Buscador de Consumo de Contratos")
-
-# ================= ESTADO =================
-for key in ["contrato", "proyecto", "empresa"]:
-    if key not in st.session_state:
-        st.session_state[key] = ""
+st.title("📊 Buscador de Consumo de Contratos")
 
 # ================= GOOGLE SHEETS =================
-ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
+ID_SHEET = "TU_ID_DE_GOOGLE_SHEET_AQUI"
+HOJA_DATOS = "CONTRATOS"  # ← nombre exacto de la hoja
 
 # ================= CARGA DE DATOS =================
 @st.cache_data
 def cargar_datos():
 
-    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
 
     creds = Credentials.from_service_account_info(
         st.secrets["google_service_account"],
@@ -33,131 +31,108 @@ def cargar_datos():
 
     client = gspread.authorize(creds)
     sh = client.open_by_key(ID_SHEET)
+    ws = sh.worksheet(HOJA_DATOS)
 
-    # 👉 Se toma la PRIMERA hoja del archivo
-    ws = sh.get_worksheet(0)
-
-    df = pd.DataFrame(ws.get_all_records())
-    df.columns = df.columns.str.strip()
+    data = ws.get_all_records()
+    df = pd.DataFrame(data)
 
     return df
 
 
+# ================= CARGAR DATA =================
 df = cargar_datos()
 
-# ================= FUNCIONES =================
-def formato_pesos(valor):
-    try:
-        return f"$ {float(valor):,.2f}"
-    except:
-        return "$ 0.00"
+# ================= VALIDACIÓN =================
+columnas_necesarias = [
+    "NUM CONTRATO",
+    "DESC PROYECTO",
+    "EMPRESA",
+    "MONTO CONTRATO",
+    "CONSUMO CONTRATO"
+]
 
+for col in columnas_necesarias:
+    if col not in df.columns:
+        st.error(f"❌ Falta la columna: {col}")
+        st.stop()
 
-def convertir_excel(dataframe):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        dataframe.to_excel(writer, index=False)
-    return output.getvalue()
+# ================= CONVERSIÓN NUMÉRICA =================
+df["MONTO CONTRATO"] = pd.to_numeric(df["MONTO CONTRATO"], errors="coerce").fillna(0)
+df["CONSUMO CONTRATO"] = pd.to_numeric(df["CONSUMO CONTRATO"], errors="coerce").fillna(0)
 
 # ================= FILTROS =================
-st.subheader("Filtros")
+st.subheader("🔎 Filtros de búsqueda")
 
-c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
+lista_proyectos = ["Todos"] + sorted(
+    df["DESC PROYECTO"].dropna().unique().tolist()
+)
 
-with c1:
-    st.session_state.contrato = st.text_input(
-        "N° CONTRATO", st.session_state.contrato
+lista_empresas = ["Todas"] + sorted(
+    df["EMPRESA"].dropna().unique().tolist()
+)
+
+col1, col2 = st.columns(2)
+
+with col1:
+    proyecto_sel = st.selectbox(
+        "DESC PROYECTO",
+        lista_proyectos
     )
 
-with c2:
-    st.session_state.proyecto = st.text_input(
-        "DESC PROYECTO", st.session_state.proyecto
+with col2:
+    empresa_sel = st.selectbox(
+        "EMPRESA",
+        lista_empresas
     )
 
-with c3:
-    st.session_state.empresa = st.text_input(
-        "EMPRESA", st.session_state.empresa
-    )
-
-with c4:
-    if st.button("Limpiar búsquedas"):
-        for k in ["contrato", "proyecto", "empresa"]:
-            st.session_state[k] = ""
-        st.rerun()
-
-# ================= FILTRADO =================
+# ================= APLICAR FILTROS =================
 resultado = df.copy()
 
-if st.session_state.contrato:
+if proyecto_sel != "Todos":
     resultado = resultado[
-        resultado["N° CONTRATO"]
-        .astype(str)
-        .str.contains(st.session_state.contrato, case=False, na=False)
+        resultado["DESC PROYECTO"] == proyecto_sel
     ]
 
-if st.session_state.proyecto:
+if empresa_sel != "Todas":
     resultado = resultado[
-        resultado["DESC PROYECTO"]
-        .astype(str)
-        .str.contains(st.session_state.proyecto, case=False, na=False)
+        resultado["EMPRESA"] == empresa_sel
     ]
 
-if st.session_state.empresa:
-    resultado = resultado[
-        resultado["EMPRESA"]
-        .astype(str)
-        .str.contains(st.session_state.empresa, case=False, na=False)
-    ]
+# ================= AGRUPAR Y CALCULAR =================
+resultado = resultado.groupby(
+    ["NUM CONTRATO", "DESC PROYECTO", "EMPRESA"],
+    as_index=False
+).agg({
+    "MONTO CONTRATO": "first",
+    "CONSUMO CONTRATO": "sum"
+})
 
-# ================= CONSUMO =================
-st.subheader("Consumo")
-
-total_contrato = (
-    resultado["Importe total (LC)"]
-    .apply(pd.to_numeric, errors="coerce")
-    .sum()
+resultado["SALDO"] = (
+    resultado["MONTO CONTRATO"] - resultado["CONSUMO CONTRATO"]
 )
 
-total_ejercido = (
-    resultado["EJERCIDO"]
-    .apply(pd.to_numeric, errors="coerce")
-    .sum()
+# ================= FORMATO =================
+resultado["MONTO CONTRATO"] = resultado["MONTO CONTRATO"].map("${:,.2f}".format)
+resultado["CONSUMO CONTRATO"] = resultado["CONSUMO CONTRATO"].map("${:,.2f}".format)
+resultado["SALDO"] = resultado["SALDO"].map("${:,.2f}".format)
+
+# ================= MOSTRAR RESULTADOS =================
+st.subheader("📄 Resultados")
+
+st.dataframe(
+    resultado,
+    use_container_width=True
 )
 
-total_pendiente = (
-    resultado["Abrir importe (LC)"]
-    .apply(pd.to_numeric, errors="coerce")
-    .sum()
-)
+# ================= TOTALES =================
+st.subheader("📌 Totales")
 
-a, b, c = st.columns(3)
-a.metric("Importe total del contrato", formato_pesos(total_contrato))
-b.metric("Importe ejercido", formato_pesos(total_ejercido))
-c.metric("Importe pendiente", formato_pesos(total_pendiente))
+total_contrato = df["MONTO CONTRATO"].sum()
+total_consumo = df["CONSUMO CONTRATO"].sum()
+total_saldo = total_contrato - total_consumo
 
-# ================= TABLA =================
-st.subheader("Tabla de resultados")
+col1, col2, col3 = st.columns(3)
 
-tabla = resultado[[
-    "N° CONTRATO",
-    "DESCRIPCION",
-    "Importe total (LC)",
-    "% PAGADO",
-    "% PENDIENTE POR EJERCER"
-]].copy()
-
-st.dataframe(tabla, use_container_width=True, height=420)
-
-# ================= EXPORTAR =================
-st.divider()
-st.download_button(
-    "Descargar resultados en Excel",
-    convertir_excel(tabla),
-    file_name="resultados_contratos.xlsx"
-)
-
-
-
-
-
-
+col1.metric("Monto Contratos", f"${total_contrato:,.2f}")
+col2.metric("Consumo Total", f"${total_consumo:,.2f}")
+col3.metric("Saldo Total", f"${total_saldo:,.2f}")
