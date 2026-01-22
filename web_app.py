@@ -112,8 +112,6 @@ with c3:
         index=contratos.index(st.session_state.contrato)
     )
 
-)
-
 with c3:
     st.session_state.contrato = st.selectbox(
         "N° CONTRATO",
@@ -190,3 +188,4 @@ if hay_filtros:
     )
 else:
     st.info("ℹ️ Aplica un filtro para ver resultados")
+
