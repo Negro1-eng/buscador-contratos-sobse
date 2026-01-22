@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Consumo de Contratos")
+st.title("📊 Buscador de Consumo de Contratos")
 
 # ================= ESTADO =================
 for key in ["contrato", "proyecto", "empresa"]:
@@ -43,6 +43,10 @@ def cargar_datos():
 
 df = cargar_datos()
 
+# ================= LIMPIEZA NUMÉRICA =================
+for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
 # ================= FUNCIONES =================
 def formato_pesos(valor):
     try:
@@ -57,96 +61,93 @@ def convertir_excel(dataframe):
         dataframe.to_excel(writer, index=False)
     return output.getvalue()
 
-# ================= CONVERTIR NUMÉRICOS =================
-for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
 # ================= FILTROS =================
-st.subheader("Filtros de Busqueda")
+st.subheader("🔎 Filtros")
 
 c1, c2, c3, c4 = st.columns([2, 3, 3, 1])
 
+# ---- PROYECTO ----
 with c1:
-    st.session_state.contrato = st.text_input(
-        "N° CONTRATO", st.session_state.contrato
+    proyectos = ["Todos"] + sorted(df["DESC PROYECTO"].dropna().unique())
+    st.session_state.proyecto = st.selectbox(
+        "DESC PROYECTO",
+        proyectos,
+        index=0 if st.session_state.proyecto == "" else proyectos.index(st.session_state.proyecto)
     )
 
+# ---- EMPRESA ----
 with c2:
-    proyectos = ["Todos"] + sorted(
-        df["DESC PROYECTO"].dropna().unique().tolist()
+    empresas = ["Todas"] + sorted(df["EMPRESA"].dropna().unique())
+    st.session_state.empresa = st.selectbox(
+        "EMPRESA",
+        empresas,
+        index=0 if st.session_state.empresa == "" else empresas.index(st.session_state.empresa)
     )
-    st.session_state.proyecto = st.selectbox(
-        "DESC PROYECTO", proyectos
-    )
+
+# ================= FILTRADO BASE =================
+resultado = df.copy()
+
+if st.session_state.proyecto not in ["", "Todos"]:
+    resultado = resultado[
+        resultado["DESC PROYECTO"] == st.session_state.proyecto
+    ]
+
+if st.session_state.empresa not in ["", "Todas"]:
+    resultado = resultado[
+        resultado["EMPRESA"] == st.session_state.empresa
+    ]
+
+# ---- CONTRATOS DEPENDIENTES ----
+contratos = [""] + sorted(
+    resultado["N° CONTRATO"].dropna().astype(str).unique().tolist()
+)
 
 with c3:
-    empresas = ["Todas"] + sorted(
-        df["EMPRESA"].dropna().unique().tolist()
-    )
-    st.session_state.empresa = st.selectbox(
-        "EMPRESA", empresas
+    st.session_state.contrato = st.selectbox(
+        "N° CONTRATO",
+        contratos,
+        index=0 if st.session_state.contrato == "" else contratos.index(st.session_state.contrato)
     )
 
+# ---- LIMPIAR ----
 with c4:
     if st.button("Limpiar"):
         for k in ["contrato", "proyecto", "empresa"]:
             st.session_state[k] = ""
         st.rerun()
 
-# ================= FILTRADO =================
-resultado = df.copy()
+# ================= CONSUMO (SOLO SI HAY CONTRATO) =================
+st.subheader("💰 Consumo del contrato")
 
 if st.session_state.contrato:
-    resultado = resultado[
-        resultado["N° CONTRATO"]
-        .astype(str)
-        .str.contains(st.session_state.contrato, case=False, na=False)
+
+    df_contrato = resultado[
+        resultado["N° CONTRATO"].astype(str) == st.session_state.contrato
     ]
 
-if st.session_state.proyecto and st.session_state.proyecto != "Todos":
-    resultado = resultado[
-        resultado["DESC PROYECTO"] == st.session_state.proyecto
-    ]
+    monto_contrato = df_contrato["Importe total (LC)"].iloc[0]
+    monto_ejercido = df_contrato["EJERCIDO"].sum()
+    monto_pendiente = df_contrato["Abrir importe (LC)"].sum()
 
-if st.session_state.empresa and st.session_state.empresa != "Todas":
-    resultado = resultado[
-        resultado["EMPRESA"] == st.session_state.empresa
-    ]
+    a, b, c = st.columns(3)
+    a.metric("Importe del contrato", formato_pesos(monto_contrato))
+    b.metric("Importe ejercido", formato_pesos(monto_ejercido))
+    c.metric("Importe pendiente", formato_pesos(monto_pendiente)
 
-# ================= AGRUPAR POR CONTRATO =================
-agrupado = resultado.groupby(
+else:
+    st.info("ℹ️ Selecciona un contrato para visualizar el consumo")
+
+# ================= TABLA =================
+st.subheader("📄 Tabla de resultados")
+
+tabla = resultado.groupby(
     ["N° CONTRATO", "DESCRIPCION"],
     as_index=False
 ).agg({
     "Importe total (LC)": "first",
-    "EJERCIDO": "sum",
-    "Abrir importe (LC)": "sum",
     "% PAGADO": "first",
     "% PENDIENTE POR EJERCER": "first"
 })
-
-# ================= CONSUMO =================
-st.subheader("Consumo del contrato")
-
-total_contrato = agrupado["Importe total (LC)"].sum()
-total_ejercido = agrupado["EJERCIDO"].sum()
-total_pendiente = agrupado["Abrir importe (LC)"].sum()
-
-a, b, c = st.columns(3)
-a.metric("Importe total del contrato", formato_pesos(total_contrato))
-b.metric("Importe ejercido", formato_pesos(total_ejercido))
-c.metric("Importe pendiente", formato_pesos(total_pendiente))
-
-# ================= TABLA =================
-st.subheader("Tabla de resultados")
-
-tabla = agrupado[[
-    "N° CONTRATO",
-    "DESCRIPCION",
-    "Importe total (LC)",
-    "% PAGADO",
-    "% PENDIENTE POR EJERCER"
-]].copy()
 
 tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
 
@@ -155,7 +156,7 @@ st.dataframe(tabla, use_container_width=True, height=420)
 # ================= EXPORTAR =================
 st.divider()
 st.download_button(
-    "Descargar resultados en Excel",
+    "📥 Descargar resultados en Excel",
     convertir_excel(tabla),
     file_name="resultados_contratos.xlsx"
 )
