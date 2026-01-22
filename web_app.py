@@ -28,7 +28,6 @@ ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
 
 @st.cache_data
 def cargar_datos():
-
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
     creds = Credentials.from_service_account_info(
@@ -37,12 +36,10 @@ def cargar_datos():
     )
 
     client = gspread.authorize(creds)
-    sh = client.open_by_key(ID_SHEET)
-    ws = sh.get_worksheet(0)
+    ws = client.open_by_key(ID_SHEET).get_worksheet(0)
 
     df = pd.DataFrame(ws.get_all_records())
     df.columns = df.columns.str.strip()
-
     return df
 
 df = cargar_datos()
@@ -69,54 +66,47 @@ def convertir_excel(dataframe):
 
 # ================= FILTROS =================
 st.subheader("🔎 Filtros")
-
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
 with c1:
     proyectos = ["Todos"] + sorted(df["DESC PROYECTO"].dropna().unique())
-    st.session_state.proyecto = st.selectbox(
+    st.selectbox(
         "DESC PROYECTO",
         proyectos,
-        index=proyectos.index(st.session_state.proyecto)
+        key="proyecto"
     )
 
 with c2:
     empresas = ["Todas"] + sorted(df["EMPRESA"].dropna().unique())
-    st.session_state.empresa = st.selectbox(
+    st.selectbox(
         "EMPRESA",
         empresas,
-        index=empresas.index(st.session_state.empresa)
+        key="empresa"
     )
 
 # ================= FILTRADO BASE =================
 resultado = df.copy()
 
 if st.session_state.proyecto != "Todos":
-    resultado = resultado[
-        resultado["DESC PROYECTO"] == st.session_state.proyecto
-    ]
+    resultado = resultado[resultado["DESC PROYECTO"] == st.session_state.proyecto]
 
 if st.session_state.empresa != "Todas":
-    resultado = resultado[
-        resultado["EMPRESA"] == st.session_state.empresa
-    ]
+    resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
+# ================= CONTRATOS DEPENDIENTES =================
 contratos = [""] + sorted(
     resultado["N° CONTRATO"].dropna().astype(str).unique()
 )
 
-with c3:
-    st.session_state.contrato = st.selectbox(
-        "N° CONTRATO",
-        contratos,
-        index=contratos.index(st.session_state.contrato)
-    )
+# 🔒 VALIDAR CONTRATO ACTUAL
+if st.session_state.contrato not in contratos:
+    st.session_state.contrato = ""
 
 with c3:
-    st.session_state.contrato = st.selectbox(
+    st.selectbox(
         "N° CONTRATO",
         contratos,
-        index=contratos.index(st.session_state.contrato)
+        key="contrato"
     )
 
 with c4:
@@ -125,7 +115,7 @@ with c4:
             st.session_state[k] = v
         st.rerun()
 
-# ================= CONTROL DE VISUALIZACIÓN =================
+# ================= CONTROL VISUAL =================
 hay_filtros = (
     st.session_state.proyecto != "Todos"
     or st.session_state.empresa != "Todas"
@@ -148,7 +138,6 @@ agrupado = resultado.groupby(
 st.subheader("💰 Consumo del contrato")
 
 if st.session_state.contrato:
-
     df_contrato = agrupado[
         agrupado["N° CONTRATO"].astype(str) == st.session_state.contrato
     ]
@@ -188,6 +177,3 @@ if hay_filtros:
     )
 else:
     st.info("ℹ️ Aplica un filtro para ver resultados")
-
-
-
