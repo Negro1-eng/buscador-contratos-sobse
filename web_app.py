@@ -116,6 +116,11 @@ with c3:
         key="contrato"
     )
 
+with c4:
+    if st.button("🧹 Limpiar"):
+        for k, v in defaults.items():
+            st.session_state[k] = v
+        st.rerun()
 # ================= CONTROL VISUAL =================
 hay_filtros = (
     st.session_state.proyecto != "Todos"
@@ -178,6 +183,7 @@ if hay_filtros:
     )
 else:
     st.info("ℹ️ Aplica un filtro para ver resultados")
+
 
 
 
