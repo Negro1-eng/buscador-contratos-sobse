@@ -132,7 +132,7 @@ if st.session_state.contrato:
     a, b, c = st.columns(3)
     a.metric("Importe del contrato", formato_pesos(monto_contrato))
     b.metric("Importe ejercido", formato_pesos(monto_ejercido))
-    c.metric("Importe pendiente", formato_pesos(monto_pendiente)
+    c.metric("Importe pendiente", formato_pesos(monto_pendiente))
 
 else:
     st.info("ℹ️ Selecciona un contrato para visualizar el consumo")
@@ -160,3 +160,4 @@ st.download_button(
     convertir_excel(tabla),
     file_name="resultados_contratos.xlsx"
 )
+
