@@ -64,11 +64,14 @@ def convertir_excel(dataframe):
         dataframe.to_excel(writer, index=False)
     return output.getvalue()
 
+
+# ================= FILTROS =================
+
 def limpiar_filtros():
     st.session_state.proyecto = "Todos"
     st.session_state.empresa = "Todas"
     st.session_state.contrato = ""
-# ================= FILTROS =================
+
 st.subheader("🔎 Filtros")
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
@@ -181,4 +184,5 @@ if hay_filtros:
     )
 else:
     st.info("ℹ️ Aplica un filtro para ver resultados")
+
 
