@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Buscador de Consumo de Contratos")
+st.title("Consumo de Contratos")
 
 # ================= ESTADO =================
 for key in ["contrato", "proyecto", "empresa"]:
@@ -33,8 +33,6 @@ def cargar_datos():
 
     client = gspread.authorize(creds)
     sh = client.open_by_key(ID_SHEET)
-
-    # 👉 Se toma la PRIMERA hoja del archivo
     ws = sh.get_worksheet(0)
 
     df = pd.DataFrame(ws.get_all_records())
@@ -59,10 +57,14 @@ def convertir_excel(dataframe):
         dataframe.to_excel(writer, index=False)
     return output.getvalue()
 
-# ================= FILTROS =================
-st.subheader("Filtros")
+# ================= CONVERTIR NUMÉRICOS =================
+for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
+# ================= FILTROS =================
+st.subheader("Filtros de Busqueda")
+
+c1, c2, c3, c4 = st.columns([2, 3, 3, 1])
 
 with c1:
     st.session_state.contrato = st.text_input(
@@ -70,17 +72,23 @@ with c1:
     )
 
 with c2:
-    st.session_state.proyecto = st.text_input(
-        "DESC PROYECTO", st.session_state.proyecto
+    proyectos = ["Todos"] + sorted(
+        df["DESC PROYECTO"].dropna().unique().tolist()
+    )
+    st.session_state.proyecto = st.selectbox(
+        "DESC PROYECTO", proyectos
     )
 
 with c3:
-    st.session_state.empresa = st.text_input(
-        "EMPRESA", st.session_state.empresa
+    empresas = ["Todas"] + sorted(
+        df["EMPRESA"].dropna().unique().tolist()
+    )
+    st.session_state.empresa = st.selectbox(
+        "EMPRESA", empresas
     )
 
 with c4:
-    if st.button("Limpiar búsquedas"):
+    if st.button("Limpiar"):
         for k in ["contrato", "proyecto", "empresa"]:
             st.session_state[k] = ""
         st.rerun()
@@ -95,40 +103,34 @@ if st.session_state.contrato:
         .str.contains(st.session_state.contrato, case=False, na=False)
     ]
 
-if st.session_state.proyecto:
+if st.session_state.proyecto and st.session_state.proyecto != "Todos":
     resultado = resultado[
-        resultado["DESC PROYECTO"]
-        .astype(str)
-        .str.contains(st.session_state.proyecto, case=False, na=False)
+        resultado["DESC PROYECTO"] == st.session_state.proyecto
     ]
 
-if st.session_state.empresa:
+if st.session_state.empresa and st.session_state.empresa != "Todas":
     resultado = resultado[
-        resultado["EMPRESA"]
-        .astype(str)
-        .str.contains(st.session_state.empresa, case=False, na=False)
+        resultado["EMPRESA"] == st.session_state.empresa
     ]
+
+# ================= AGRUPAR POR CONTRATO =================
+agrupado = resultado.groupby(
+    ["N° CONTRATO", "DESCRIPCION"],
+    as_index=False
+).agg({
+    "Importe total (LC)": "first",
+    "EJERCIDO": "sum",
+    "Abrir importe (LC)": "sum",
+    "% PAGADO": "first",
+    "% PENDIENTE POR EJERCER": "first"
+})
 
 # ================= CONSUMO =================
-st.subheader("Consumo")
+st.subheader("Consumo del contrato")
 
-total_contrato = (
-    resultado["Importe total (LC)"]
-    .apply(pd.to_numeric, errors="coerce")
-    .sum()
-)
-
-total_ejercido = (
-    resultado["EJERCIDO"]
-    .apply(pd.to_numeric, errors="coerce")
-    .sum()
-)
-
-total_pendiente = (
-    resultado["Abrir importe (LC)"]
-    .apply(pd.to_numeric, errors="coerce")
-    .sum()
-)
+total_contrato = agrupado["Importe total (LC)"].sum()
+total_ejercido = agrupado["EJERCIDO"].sum()
+total_pendiente = agrupado["Abrir importe (LC)"].sum()
 
 a, b, c = st.columns(3)
 a.metric("Importe total del contrato", formato_pesos(total_contrato))
@@ -138,13 +140,15 @@ c.metric("Importe pendiente", formato_pesos(total_pendiente))
 # ================= TABLA =================
 st.subheader("Tabla de resultados")
 
-tabla = resultado[[
+tabla = agrupado[[
     "N° CONTRATO",
     "DESCRIPCION",
     "Importe total (LC)",
     "% PAGADO",
     "% PENDIENTE POR EJERCER"
 ]].copy()
+
+tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
 
 st.dataframe(tabla, use_container_width=True, height=420)
 
@@ -155,4 +159,3 @@ st.download_button(
     convertir_excel(tabla),
     file_name="resultados_contratos.xlsx"
 )
-
