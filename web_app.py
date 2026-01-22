@@ -99,7 +99,7 @@ c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
 with c1:
     proyectos = ["Todos"] + sorted(df["DESC PROYECTO"].dropna().unique())
-    st.selectbox("DESC PROYECTO", proyectos, key="proyecto")
+    st.selectbox("DESC PROGRAMA", proyectos, key="proyecto")
 
 with c2:
     empresas = ["Todas"] + sorted(df["EMPRESA"].dropna().unique())
@@ -205,6 +205,7 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
 
 
 
