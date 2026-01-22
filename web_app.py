@@ -10,6 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 st.title("Consumo de Contratos")
+
 # ================= ACTUALIZAR DATOS =================
 col1, col2 = st.columns([1, 6])
 
@@ -18,6 +19,7 @@ with col1:
         st.cache_data.clear()
         st.success("Datos actualizados desde Google Sheets")
         st.rerun()
+
 # ================= ESTADO =================
 defaults = {
     "proyecto": "Todos",
@@ -42,13 +44,20 @@ def cargar_datos():
     )
 
     client = gspread.authorize(creds)
-    ws = client.open_by_key(ID_SHEET).get_worksheet(0)
 
-    df = pd.DataFrame(ws.get_all_records())
-    df.columns = df.columns.str.strip()
-    return df
+    ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
+    ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
 
-df = cargar_datos()
+    df_contratos = pd.DataFrame(ws_contratos.get_all_records())
+    df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
+
+    df_contratos.columns = df_contratos.columns.str.strip()
+    df_evolucion.columns = df_evolucion.columns.str.strip()
+
+    return df_contratos, df_evolucion
+
+
+df, df_evolucion = cargar_datos()
 
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
@@ -60,6 +69,15 @@ for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
     )
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
+for col in ["ORIGINAL", "MODIFICADO", "COMPROMETIDO", "EJERCIDO"]:
+    df_evolucion[col] = (
+        df_evolucion[col]
+        .astype(str)
+        .str.replace("$", "", regex=False)
+        .str.replace(",", "", regex=False)
+    )
+    df_evolucion[col] = pd.to_numeric(df_evolucion[col], errors="coerce").fillna(0)
+
 # ================= FUNCIONES =================
 def formato_pesos(valor):
     return f"$ {valor:,.2f}"
@@ -70,9 +88,7 @@ def convertir_excel(dataframe):
         dataframe.to_excel(writer, index=False)
     return output.getvalue()
 
-
 # ================= FILTROS =================
-
 def limpiar_filtros():
     st.session_state.proyecto = "Todos"
     st.session_state.empresa = "Todas"
@@ -83,19 +99,11 @@ c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
 with c1:
     proyectos = ["Todos"] + sorted(df["DESC PROYECTO"].dropna().unique())
-    st.selectbox(
-        "DESC PROYECTO",
-        proyectos,
-        key="proyecto"
-    )
+    st.selectbox("DESC PROYECTO", proyectos, key="proyecto")
 
 with c2:
     empresas = ["Todas"] + sorted(df["EMPRESA"].dropna().unique())
-    st.selectbox(
-        "EMPRESA",
-        empresas,
-        key="empresa"
-    )
+    st.selectbox("EMPRESA", empresas, key="empresa")
 
 # ================= FILTRADO BASE =================
 resultado = df.copy()
@@ -111,27 +119,30 @@ contratos = [""] + sorted(
     resultado["N° CONTRATO"].dropna().astype(str).unique()
 )
 
-#  VALIDAR CONTRATO ACTUAL
 if st.session_state.contrato not in contratos:
     st.session_state.contrato = ""
 
 with c3:
-    st.selectbox(
-        "N° CONTRATO",
-        contratos,
-        key="contrato"
-    )
-st.button(
-    " Limpiar Filtros",
-    on_click=limpiar_filtros
-)
+    st.selectbox("N° CONTRATO", contratos, key="contrato")
 
-# ================= CONTROL VISUAL =================
-hay_filtros = (
-    st.session_state.proyecto != "Todos"
-    or st.session_state.empresa != "Todas"
-    or st.session_state.contrato != ""
-)
+st.button("Limpiar Filtros", on_click=limpiar_filtros)
+
+# ================= EVOLUCIÓN DEL PROYECTO =================
+if st.session_state.proyecto != "Todos":
+    evo = df_evolucion[
+        df_evolucion["PROYECTO"] == st.session_state.proyecto
+    ]
+
+    if not evo.empty:
+        evo = evo.iloc[0]
+
+        st.subheader("Evolución presupuestal del proyecto")
+        e1, e2, e3, e4 = st.columns(4)
+
+        e1.metric("Original", formato_pesos(evo["ORIGINAL"]))
+        e2.metric("Modificado", formato_pesos(evo["MODIFICADO"]))
+        e3.metric("Comprometido", formato_pesos(evo["COMPROMETIDO"]))
+        e4.metric("Ejercido", formato_pesos(evo["EJERCIDO"]))
 
 # ================= AGRUPAR =================
 agrupado = resultado.groupby(
@@ -165,6 +176,12 @@ else:
     st.info("Selecciona un contrato para ver el consumo")
 
 # ================= TABLA =================
+hay_filtros = (
+    st.session_state.proyecto != "Todos"
+    or st.session_state.empresa != "Todas"
+    or st.session_state.contrato != ""
+)
+
 if hay_filtros:
     st.subheader("Resultados")
 
@@ -188,6 +205,7 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
 
 
 
