@@ -112,6 +112,15 @@ with c3:
         index=contratos.index(st.session_state.contrato)
     )
 
+)
+
+with c3:
+    st.session_state.contrato = st.selectbox(
+        "N° CONTRATO",
+        contratos,
+        index=contratos.index(st.session_state.contrato)
+    )
+
 with c4:
     if st.button("🧹 Limpiar"):
         for k, v in defaults.items():
