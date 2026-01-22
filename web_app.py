@@ -13,7 +13,7 @@ st.set_page_config(
 col1, col2 = st.columns([1, 6])
 
 with col1:
-    if st.button("🔄 Actualizar datos"):
+    if st.button("Actualizar datos"):
         st.cache_data.clear()
         st.success("Datos actualizados desde Google Sheets")
         st.rerun()
@@ -190,6 +190,7 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
 
 
 
