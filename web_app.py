@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 Consumo de Contratos")
+st.title("Consumo de Contratos")
 
 # ================= ESTADO =================
 defaults = {
@@ -72,7 +72,7 @@ def limpiar_filtros():
     st.session_state.empresa = "Todas"
     st.session_state.contrato = ""
 
-st.subheader("🔎 Filtros")
+st.subheader("Filtros")
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
 with c1:
@@ -105,7 +105,7 @@ contratos = [""] + sorted(
     resultado["N° CONTRATO"].dropna().astype(str).unique()
 )
 
-# 🔒 VALIDAR CONTRATO ACTUAL
+#  VALIDAR CONTRATO ACTUAL
 if st.session_state.contrato not in contratos:
     st.session_state.contrato = ""
 
@@ -116,7 +116,7 @@ with c3:
         key="contrato"
     )
 st.button(
-    "🧹 Limpiar",
+    " Limpiar Filtros",
     on_click=limpiar_filtros
 )
 
@@ -140,7 +140,7 @@ agrupado = resultado.groupby(
 })
 
 # ================= CONSUMO =================
-st.subheader("💰 Consumo del contrato")
+st.subheader("Consumo del contrato")
 
 if st.session_state.contrato:
     df_contrato = agrupado[
@@ -156,11 +156,11 @@ if st.session_state.contrato:
     b.metric("Importe ejercido", formato_pesos(monto_ejercido))
     c.metric("Importe pendiente", formato_pesos(monto_pendiente))
 else:
-    st.info("ℹ️ Selecciona un contrato para ver el consumo")
+    st.info("Selecciona un contrato para ver el consumo")
 
 # ================= TABLA =================
 if hay_filtros:
-    st.subheader("📄 Resultados")
+    st.subheader("Resultados")
 
     tabla = agrupado[[
         "N° CONTRATO",
@@ -176,12 +176,13 @@ if hay_filtros:
 
     st.divider()
     st.download_button(
-        "📥 Descargar resultados en Excel",
+        "Descargar resultados en Excel",
         convertir_excel(tabla),
         file_name="resultados_contratos.xlsx"
     )
 else:
-    st.info("ℹ️ Aplica un filtro para ver resultados")
+    st.info("Aplica un filtro para ver resultados")
+
 
 
 
