@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 Buscador de Consumo de Contratos")
+st.title("Consumo de Contratos")
 
 # ================= ESTADO =================
 for key in ["contrato", "proyecto", "empresa"]:
@@ -62,7 +62,7 @@ for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
 # ================= FILTROS =================
-st.subheader("🔎 Filtros")
+st.subheader("Filtros")
 
 c1, c2, c3, c4 = st.columns([2, 3, 3, 1])
 
@@ -126,7 +126,7 @@ agrupado = resultado.groupby(
 })
 
 # ================= CONSUMO =================
-st.subheader("💰 Consumo del contrato")
+st.subheader("Consumo del contrato")
 
 total_contrato = agrupado["Importe total (LC)"].sum()
 total_ejercido = agrupado["EJERCIDO"].sum()
@@ -138,7 +138,7 @@ b.metric("Importe ejercido", formato_pesos(total_ejercido))
 c.metric("Importe pendiente", formato_pesos(total_pendiente))
 
 # ================= TABLA =================
-st.subheader("📄 Tabla de resultados")
+st.subheader("Resultados")
 
 tabla = agrupado[[
     "N° CONTRATO",
