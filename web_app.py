@@ -9,6 +9,7 @@ st.set_page_config(
     page_title="Buscador de Consumo de Contratos",
     layout="wide"
 )
+st.title("Consumo de Contratos")
 # ================= ACTUALIZAR DATOS =================
 col1, col2 = st.columns([1, 6])
 
@@ -17,9 +18,6 @@ with col1:
         st.cache_data.clear()
         st.success("Datos actualizados desde Google Sheets")
         st.rerun()
-
-st.title("Consumo de Contratos")
-
 # ================= ESTADO =================
 defaults = {
     "proyecto": "Todos",
@@ -190,6 +188,7 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
 
 
 
