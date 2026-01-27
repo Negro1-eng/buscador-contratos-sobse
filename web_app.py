@@ -232,14 +232,53 @@ if hay_filtros:
 
     tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
 
-    st.dataframe(tabla, use_container_width=True, height=420)
+    st.dataframe(
+        tabla,
+        use_container_width=True,
+        height=420
+    )
+
+    # ================= SELECCIÓN DE FILA =================
+    st.markdown("### 🔎 Selecciona un contrato para ver sus CLC")
+
+    contrato_seleccionado = st.selectbox(
+        "Contrato",
+        options=tabla["N° CONTRATO"].astype(str).unique(),
+        key="contrato_fila"
+    )
+
+    # ================= CLC POR FILA =================
+    clc_fila = df_clc[
+        df_clc["CONTRATO"].astype(str) == contrato_seleccionado
+    ]
+
+    if not clc_fila.empty:
+        st.subheader(f"CLC del contrato {contrato_seleccionado}")
+
+        tabla_clc = clc_fila[["CLC", "MONTO"]].copy()
+        tabla_clc["MONTO"] = tabla_clc["MONTO"].apply(formato_pesos)
+
+        st.dataframe(
+            tabla_clc,
+            use_container_width=True,
+            height=300
+        )
+
+        st.metric(
+            "Total ejercido por CLC",
+            formato_pesos(clc_fila["MONTO"].sum())
+        )
+    else:
+        st.info("Este contrato no tiene CLC registradas")
 
     st.divider()
+
     st.download_button(
         "Descargar resultados en Excel",
         convertir_excel(tabla),
         file_name="resultados_contratos.xlsx"
     )
+
 else:
     st.info("Aplica un filtro para ver resultados")
 
