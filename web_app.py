@@ -9,11 +9,11 @@ st.set_page_config(
     page_title="Buscador de Consumo de Contratos",
     layout="wide"
 )
-
 st.title("Consumo de Contratos")
 
 # ================= ACTUALIZAR DATOS =================
 col1, col2 = st.columns([1, 6])
+
 with col1:
     if st.button("Actualizar datos"):
         st.cache_data.clear()
@@ -42,16 +42,11 @@ def cargar_datos():
         scopes=scopes
     )
     client = gspread.authorize(creds)
-
     sh = client.open_by_key(ID_SHEET)
 
-    ws_contratos = sh.get_worksheet(0)
-    ws_evolucion = sh.worksheet("Evolucion")
-    ws_clc = sh.worksheet("CLC_CONTRATOS")
-
-    df_contratos = pd.DataFrame(ws_contratos.get_all_records())
-    df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
-    df_clc = pd.DataFrame(ws_clc.get_all_records())
+    df_contratos = pd.DataFrame(sh.get_worksheet(0).get_all_records())
+    df_evolucion = pd.DataFrame(sh.worksheet("Evolucion").get_all_records())
+    df_clc = pd.DataFrame(sh.worksheet("CLC_CONTRATOS").get_all_records())
 
     df_contratos.columns = df_contratos.columns.str.strip()
     df_evolucion.columns = df_evolucion.columns.str.strip()
@@ -64,8 +59,7 @@ df, df_evolucion, df_clc = cargar_datos()
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
     df[col] = (
-        df[col]
-        .astype(str)
+        df[col].astype(str)
         .str.replace("$", "", regex=False)
         .str.replace(",", "", regex=False)
     )
@@ -73,12 +67,19 @@ for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
 
 for col in ["ORIGINAL", "MODIFICADO", "COMPROMETIDO", "EJERCIDO"]:
     df_evolucion[col] = (
-        df_evolucion[col]
-        .astype(str)
+        df_evolucion[col].astype(str)
         .str.replace("$", "", regex=False)
         .str.replace(",", "", regex=False)
     )
     df_evolucion[col] = pd.to_numeric(df_evolucion[col], errors="coerce").fillna(0)
+
+df_clc["CONTRATO"] = df_clc["CONTRATO"].astype(str).str.strip()
+df_clc["MONTO"] = (
+    df_clc["MONTO"].astype(str)
+    .str.replace("$", "", regex=False)
+    .str.replace(",", "", regex=False)
+)
+df_clc["MONTO"] = pd.to_numeric(df_clc["MONTO"], errors="coerce").fillna(0)
 
 # ================= FUNCIONES =================
 def formato_pesos(valor):
@@ -97,12 +98,11 @@ def limpiar_filtros():
     st.session_state.contrato = ""
 
 st.subheader("Filtros")
-
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
 with c1:
     proyectos = ["Todos"] + sorted(df["DESC PROYECTO"].dropna().unique())
-    st.selectbox("DESC PROYECTO", proyectos, key="proyecto")
+    st.selectbox("DESC PROGRAMA", proyectos, key="proyecto")
 
 with c2:
     empresas = ["Todas"] + sorted(df["EMPRESA"].dropna().unique())
@@ -117,28 +117,6 @@ if st.session_state.proyecto != "Todos":
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
-contratos = [""] + sorted(resultado["N° CONTRATO"].dropna().astype(str).unique())
-if st.session_state.contrato not in contratos:
-    st.session_state.contrato = ""
-
-with c3:
-    st.selectbox("N° CONTRATO", contratos, key="contrato")
-
-with c4:
-    st.button("Limpiar", on_click=limpiar_filtros)
-
-# ================= EVOLUCIÓN =================
-if st.session_state.proyecto != "Todos":
-    evo = df_evolucion[df_evolucion["PROYECTO"] == st.session_state.proyecto]
-    if not evo.empty:
-        evo = evo.iloc[0]
-        st.subheader("Evolución presupuestal")
-        e1, e2, e3, e4 = st.columns(4)
-        e1.metric("Original", formato_pesos(evo["ORIGINAL"]))
-        e2.metric("Modificado", formato_pesos(evo["MODIFICADO"]))
-        e3.metric("Comprometido", formato_pesos(evo["COMPROMETIDO"]))
-        e4.metric("Ejercido", formato_pesos(evo["EJERCIDO"]))
-
 # ================= AGRUPAR =================
 agrupado = resultado.groupby(
     ["N° CONTRATO", "DESCRIPCION"],
@@ -151,55 +129,58 @@ agrupado = resultado.groupby(
     "% PENDIENTE POR EJERCER": "first"
 })
 
-# ================= TABLA SELECCIONABLE =================
-hay_filtros = (
-    st.session_state.proyecto != "Todos" or
-    st.session_state.empresa != "Todas" or
-    st.session_state.contrato != ""
+# ================= TABLA DE RESULTADOS =================
+st.subheader("Resultados")
+
+tabla = agrupado[[
+    "N° CONTRATO",
+    "DESCRIPCION",
+    "Importe total (LC)",
+    "% PAGADO",
+    "% PENDIENTE POR EJERCER"
+]].copy()
+
+tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
+
+st.dataframe(tabla, use_container_width=True, height=420)
+
+# ================= SELECCIÓN DE CONTRATO =================
+st.markdown("### 🔎 Selecciona un contrato para ver sus CLC")
+
+contrato_sel = st.selectbox(
+    "Contrato",
+    options=tabla["N° CONTRATO"].astype(str).unique()
 )
 
-if hay_filtros:
-    st.subheader("Resultados (selecciona un contrato)")
+# ================= CLC DEL CONTRATO =================
+clc_contrato = df_clc[df_clc["CONTRATO"] == contrato_sel]
 
-    tabla = agrupado[
-        ["N° CONTRATO", "DESCRIPCION", "Importe total (LC)", "% PAGADO", "% PENDIENTE POR EJERCER"]
-    ].copy()
+if not clc_contrato.empty:
+    st.subheader(f"CLC asociadas al contrato {contrato_sel}")
 
-    tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
+    tabla_clc = clc_contrato[[
+        "CLC",
+        "Fondo",
+        "Posición presupuestaria",
+        "Programa de financiación",
+        "MONTO"
+    ]].copy()
 
-    st.data_editor(
-        tabla,
-        use_container_width=True,
-        hide_index=True,
-        disabled=True,
-        selection_mode="single-row",
-        key="tabla_contratos"
+    tabla_clc["MONTO"] = tabla_clc["MONTO"].apply(formato_pesos)
+
+    st.dataframe(tabla_clc, use_container_width=True, height=300)
+
+    st.metric(
+        "Total ejercido por CLC",
+        formato_pesos(clc_contrato["MONTO"].sum())
     )
-
-    # ================= CLC =================
-    seleccionadas = st.session_state["tabla_contratos"]["selected_rows"]
-
-    if seleccionadas:
-        fila = seleccionadas[0]
-        contrato_sel = tabla.iloc[fila]["N° CONTRATO"]
-
-        st.subheader(f"CLC del contrato {contrato_sel}")
-
-        clc_contrato = df_clc[
-            df_clc["N° CONTRATO"].astype(str) == str(contrato_sel)
-        ]
-
-        if not clc_contrato.empty:
-            st.dataframe(clc_contrato, use_container_width=True, height=350)
-
-            st.download_button(
-                "Descargar CLC del contrato",
-                convertir_excel(clc_contrato),
-                file_name=f"CLC_{contrato_sel}.xlsx"
-            )
-        else:
-            st.warning("Este contrato no tiene CLC registradas")
-
 else:
-    st.info("Aplica un filtro para ver resultados")
+    st.info("Este contrato no tiene CLC registradas")
 
+# ================= DESCARGA =================
+st.divider()
+st.download_button(
+    "Descargar resultados en Excel",
+    convertir_excel(tabla),
+    file_name="resultados_contratos.xlsx"
+)
