@@ -44,20 +44,23 @@ def cargar_datos():
     )
 
     client = gspread.authorize(creds)
+    book = client.open_by_key(ID_SHEET)
 
-    ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
-    ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
+    ws_contratos = book.get_worksheet(0)
+    ws_evolucion = book.worksheet("Evolucion")
+    ws_clc = book.worksheet("CLC_CONTRATOS")  # 👈 NUEVA HOJA
 
     df_contratos = pd.DataFrame(ws_contratos.get_all_records())
     df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
+    df_clc = pd.DataFrame(ws_clc.get_all_records())
 
-    df_contratos.columns = df_contratos.columns.str.strip()
-    df_evolucion.columns = df_evolucion.columns.str.strip()
+    for df_ in [df_contratos, df_evolucion, df_clc]:
+        df_.columns = df_.columns.str.strip()
 
-    return df_contratos, df_evolucion
+    return df_contratos, df_evolucion, df_clc
 
 
-df, df_evolucion = cargar_datos()
+df, df_evolucion, df_clc = cargar_datos()
 
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
@@ -77,6 +80,14 @@ for col in ["ORIGINAL", "MODIFICADO", "COMPROMETIDO", "EJERCIDO"]:
         .str.replace(",", "", regex=False)
     )
     df_evolucion[col] = pd.to_numeric(df_evolucion[col], errors="coerce").fillna(0)
+
+df_clc["MONTO"] = (
+    df_clc["MONTO"]
+    .astype(str)
+    .str.replace("$", "", regex=False)
+    .str.replace(",", "", regex=False)
+)
+df_clc["MONTO"] = pd.to_numeric(df_clc["MONTO"], errors="coerce").fillna(0)
 
 # ================= FUNCIONES =================
 def formato_pesos(valor):
@@ -175,6 +186,32 @@ if st.session_state.contrato:
 else:
     st.info("Selecciona un contrato para ver el consumo")
 
+# ================= CLC DEL CONTRATO =================
+if st.session_state.contrato:
+
+    clc_contrato = df_clc[
+        df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+    ]
+
+    if not clc_contrato.empty:
+        st.subheader("CLC asociadas al contrato")
+
+        tabla_clc = clc_contrato[["CLC", "MONTO"]].copy()
+        tabla_clc["MONTO"] = tabla_clc["MONTO"].apply(formato_pesos)
+
+        st.dataframe(
+            tabla_clc,
+            use_container_width=True,
+            height=300
+        )
+
+        st.metric(
+            "Total ejercido por CLC",
+            formato_pesos(clc_contrato["MONTO"].sum())
+        )
+    else:
+        st.info("Este contrato no tiene CLC registradas")
+
 # ================= TABLA =================
 hay_filtros = (
     st.session_state.proyecto != "Todos"
@@ -205,6 +242,7 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
 
 
 
