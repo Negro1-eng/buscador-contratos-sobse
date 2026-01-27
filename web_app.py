@@ -42,24 +42,26 @@ def cargar_datos():
         scopes=scopes
     )
     client = gspread.authorize(creds)
-    sh = client.open_by_key(ID_SHEET)
 
-    df_contratos = pd.DataFrame(sh.get_worksheet(0).get_all_records())
-    df_evolucion = pd.DataFrame(sh.worksheet("Evolucion").get_all_records())
-    df_clc = pd.DataFrame(sh.worksheet("CLC_CONTRATOS").get_all_records())
+    ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
+    ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
+
+    df_contratos = pd.DataFrame(ws_contratos.get_all_records())
+    df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
 
     df_contratos.columns = df_contratos.columns.str.strip()
     df_evolucion.columns = df_evolucion.columns.str.strip()
-    df_clc.columns = df_clc.columns.str.strip()
 
-    return df_contratos, df_evolucion, df_clc
+    return df_contratos, df_evolucion
 
-df, df_evolucion, df_clc = cargar_datos()
+
+df, df_evolucion = cargar_datos()
 
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
     df[col] = (
-        df[col].astype(str)
+        df[col]
+        .astype(str)
         .str.replace("$", "", regex=False)
         .str.replace(",", "", regex=False)
     )
@@ -67,19 +69,12 @@ for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
 
 for col in ["ORIGINAL", "MODIFICADO", "COMPROMETIDO", "EJERCIDO"]:
     df_evolucion[col] = (
-        df_evolucion[col].astype(str)
+        df_evolucion[col]
+        .astype(str)
         .str.replace("$", "", regex=False)
         .str.replace(",", "", regex=False)
     )
     df_evolucion[col] = pd.to_numeric(df_evolucion[col], errors="coerce").fillna(0)
-
-df_clc["CONTRATO"] = df_clc["CONTRATO"].astype(str).str.strip()
-df_clc["MONTO"] = (
-    df_clc["MONTO"].astype(str)
-    .str.replace("$", "", regex=False)
-    .str.replace(",", "", regex=False)
-)
-df_clc["MONTO"] = pd.to_numeric(df_clc["MONTO"], errors="coerce").fillna(0)
 
 # ================= FUNCIONES =================
 def formato_pesos(valor):
@@ -117,6 +112,36 @@ if st.session_state.proyecto != "Todos":
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
+# ================= CONTRATOS DEPENDIENTES =================
+contratos = [""] + sorted(
+    resultado["N° CONTRATO"].dropna().astype(str).unique()
+)
+
+if st.session_state.contrato not in contratos:
+    st.session_state.contrato = ""
+
+with c3:
+    st.selectbox("N° CONTRATO", contratos, key="contrato")
+
+st.button("Limpiar Filtros", on_click=limpiar_filtros)
+
+# ================= EVOLUCIÓN DEL PROYECTO =================
+if st.session_state.proyecto != "Todos":
+    evo = df_evolucion[
+        df_evolucion["PROYECTO"] == st.session_state.proyecto
+    ]
+
+    if not evo.empty:
+        evo = evo.iloc[0]
+
+        st.subheader("Evolución presupuestal del proyecto")
+        e1, e2, e3, e4 = st.columns(4)
+
+        e1.metric("Original", formato_pesos(evo["ORIGINAL"]))
+        e2.metric("Modificado", formato_pesos(evo["MODIFICADO"]))
+        e3.metric("Comprometido", formato_pesos(evo["COMPROMETIDO"]))
+        e4.metric("Ejercido", formato_pesos(evo["EJERCIDO"]))
+
 # ================= AGRUPAR =================
 agrupado = resultado.groupby(
     ["N° CONTRATO", "DESCRIPCION"],
@@ -129,58 +154,55 @@ agrupado = resultado.groupby(
     "% PENDIENTE POR EJERCER": "first"
 })
 
-# ================= TABLA DE RESULTADOS =================
-st.subheader("Resultados")
+# ================= CONSUMO =================
+st.subheader("Consumo del contrato")
 
-tabla = agrupado[[
-    "N° CONTRATO",
-    "DESCRIPCION",
-    "Importe total (LC)",
-    "% PAGADO",
-    "% PENDIENTE POR EJERCER"
-]].copy()
+if st.session_state.contrato:
+    df_contrato = agrupado[
+        agrupado["N° CONTRATO"].astype(str) == st.session_state.contrato
+    ]
 
-tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
+    monto_contrato = df_contrato["Importe total (LC)"].iloc[0]
+    monto_ejercido = df_contrato["EJERCIDO"].iloc[0]
+    monto_pendiente = df_contrato["Abrir importe (LC)"].iloc[0]
 
-st.dataframe(tabla, use_container_width=True, height=420)
+    a, b, c = st.columns(3)
+    a.metric("Importe del contrato", formato_pesos(monto_contrato))
+    b.metric("Importe ejercido", formato_pesos(monto_ejercido))
+    c.metric("Importe pendiente", formato_pesos(monto_pendiente))
+else:
+    st.info("Selecciona un contrato para ver el consumo")
 
-# ================= SELECCIÓN DE CONTRATO =================
-st.markdown("### 🔎 Selecciona un contrato para ver sus CLC")
-
-contrato_sel = st.selectbox(
-    "Contrato",
-    options=tabla["N° CONTRATO"].astype(str).unique()
+# ================= TABLA =================
+hay_filtros = (
+    st.session_state.proyecto != "Todos"
+    or st.session_state.empresa != "Todas"
+    or st.session_state.contrato != ""
 )
 
-# ================= CLC DEL CONTRATO =================
-clc_contrato = df_clc[df_clc["CONTRATO"] == contrato_sel]
+if hay_filtros:
+    st.subheader("Resultados")
 
-if not clc_contrato.empty:
-    st.subheader(f"CLC asociadas al contrato {contrato_sel}")
-
-    tabla_clc = clc_contrato[[
-        "CLC",
-        "Fondo",
-        "Posición presupuestaria",
-        "Programa de financiación",
-        "MONTO"
+    tabla = agrupado[[
+        "N° CONTRATO",
+        "DESCRIPCION",
+        "Importe total (LC)",
+        "% PAGADO",
+        "% PENDIENTE POR EJERCER"
     ]].copy()
 
-    tabla_clc["MONTO"] = tabla_clc["MONTO"].apply(formato_pesos)
+    tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
 
-    st.dataframe(tabla_clc, use_container_width=True, height=300)
+    st.dataframe(tabla, use_container_width=True, height=420)
 
-    st.metric(
-        "Total ejercido por CLC",
-        formato_pesos(clc_contrato["MONTO"].sum())
+    st.divider()
+    st.download_button(
+        "Descargar resultados en Excel",
+        convertir_excel(tabla),
+        file_name="resultados_contratos.xlsx"
     )
 else:
-    st.info("Este contrato no tiene CLC registradas")
+    st.info("Aplica un filtro para ver resultados")
 
-# ================= DESCARGA =================
-st.divider()
-st.download_button(
-    "Descargar resultados en Excel",
-    convertir_excel(tabla),
-    file_name="resultados_contratos.xlsx"
-)
+
+
