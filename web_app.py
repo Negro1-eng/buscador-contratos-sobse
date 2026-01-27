@@ -47,7 +47,7 @@ def cargar_datos():
 
     ws_contratos = sh.get_worksheet(0)
     ws_evolucion = sh.worksheet("Evolucion")
-    ws_clc = sh.worksheet("CLC")
+    ws_clc = sh.worksheet("CLC_CONTRATOS")
 
     df_contratos = pd.DataFrame(ws_contratos.get_all_records())
     df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
@@ -202,3 +202,4 @@ if hay_filtros:
 
 else:
     st.info("Aplica un filtro para ver resultados")
+
