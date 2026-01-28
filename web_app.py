@@ -207,22 +207,19 @@ if hay_filtros:
 
     # ======= CLC DESPLEGABLE =======
     if st.session_state.contrato:
-        with st.expander(" Ver CLC del contrato seleccionado"):
-            clc_contrato = df_clc[
-                df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-            ][["CLC", "MONTO"]].copy()
+       with st.expander("Ver CLC del contrato seleccionado"):
+    clc_contrato = df_clc[
+        df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+    ][["CLC", "MONTO"]].copy()
 
-            if clc_contrato.empty:
-                st.info("Este contrato no tiene CLC registrados")
-            else:
-                clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
-                st.dataframe(clc_contrato, use_container_width=True)
+    if clc_contrato.empty:
+        st.info("Este contrato no tiene CLC registrados")
+    else:
+        total_clc = clc_contrato["MONTO"].sum()
 
-    st.divider()
-    st.download_button(
-        "Descargar resultados en Excel",
-        convertir_excel(tabla),
-        file_name="resultados_contratos.xlsx"
-    )
-else:
-    st.info("Aplica un filtro para ver resultados")
+        clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+        st.dataframe(clc_contrato, use_container_width=True)
+
+        st.markdown(
+            f"###  **Total CLC:** {formato_pesos(total_clc)}"
+        )
