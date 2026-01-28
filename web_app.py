@@ -45,17 +45,20 @@ def cargar_datos():
 
     ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
     ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
+    ws_clc = client.open_by_key(ID_SHEET).worksheet("CLC_CONTRATOS")
 
     df_contratos = pd.DataFrame(ws_contratos.get_all_records())
     df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
+    df_clc = pd.DataFrame(ws_clc.get_all_records())
 
     df_contratos.columns = df_contratos.columns.str.strip()
     df_evolucion.columns = df_evolucion.columns.str.strip()
+    df_clc.columns = df_clc.columns.str.strip()
 
-    return df_contratos, df_evolucion
+    return df_contratos, df_evolucion, df_clc
 
 
-df, df_evolucion = cargar_datos()
+df, df_evolucion, df_clc = cargar_datos()
 
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
@@ -75,6 +78,14 @@ for col in ["ORIGINAL", "MODIFICADO", "COMPROMETIDO", "EJERCIDO"]:
         .str.replace(",", "", regex=False)
     )
     df_evolucion[col] = pd.to_numeric(df_evolucion[col], errors="coerce").fillna(0)
+
+df_clc["MONTO"] = (
+    df_clc["MONTO"]
+    .astype(str)
+    .str.replace("$", "", regex=False)
+    .str.replace(",", "", regex=False)
+)
+df_clc["MONTO"] = pd.to_numeric(df_clc["MONTO"], errors="coerce").fillna(0)
 
 # ================= FUNCIONES =================
 def formato_pesos(valor):
@@ -125,7 +136,7 @@ with c3:
 
 st.button("Limpiar Filtros", on_click=limpiar_filtros)
 
-# ================= EVOLUCIÓN DEL PROYECTO =================
+# ================= EVOLUCIÓN =================
 if st.session_state.proyecto != "Todos":
     evo = df_evolucion[
         df_evolucion["PROYECTO"] == st.session_state.proyecto
@@ -133,7 +144,6 @@ if st.session_state.proyecto != "Todos":
 
     if not evo.empty:
         evo = evo.iloc[0]
-
         st.subheader("Evolución presupuestal del proyecto")
         e1, e2, e3, e4 = st.columns(4)
 
@@ -195,6 +205,19 @@ if hay_filtros:
 
     st.dataframe(tabla, use_container_width=True, height=420)
 
+    # ======= CLC DESPLEGABLE =======
+    if st.session_state.contrato:
+        with st.expander(" Ver CLC del contrato seleccionado"):
+            clc_contrato = df_clc[
+                df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+            ][["CLC", "MONTO"]].copy()
+
+            if clc_contrato.empty:
+                st.info("Este contrato no tiene CLC registrados")
+            else:
+                clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+                st.dataframe(clc_contrato, use_container_width=True)
+
     st.divider()
     st.download_button(
         "Descargar resultados en Excel",
@@ -203,6 +226,3 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
-
-
-
