@@ -205,11 +205,10 @@ if hay_filtros:
 
     st.dataframe(tabla, use_container_width=True, height=420)
 
-    # ======= CLC DESPLEGABLE =======
-    if st.session_state.contrato:
-    with st.expander(" Ver CLC del contrato seleccionado"):
+   if st.session_state.contrato:
+    with st.expander("📄 Ver CLC del contrato seleccionado"):
         clc_contrato = df_clc[
-            df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+            df_clc["N° CONTRATO"].astype(str) == st.session_state.contrato
         ][["CLC", "MONTO"]].copy()
 
         if clc_contrato.empty:
@@ -221,5 +220,5 @@ if hay_filtros:
             st.dataframe(clc_contrato, use_container_width=True)
 
             st.markdown(
-                f"###  **Total CLC:** {formato_pesos(total_clc)}"
+                f"### 💰 **Total CLC:** {formato_pesos(total_clc)}"
             )
