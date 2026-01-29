@@ -13,7 +13,6 @@ st.title("Consumo de Contratos")
 
 # ================= ACTUALIZAR DATOS =================
 col1, col2 = st.columns([1, 6])
-
 with col1:
     if st.button("Actualizar datos"):
         st.cache_data.clear()
@@ -26,7 +25,6 @@ defaults = {
     "empresa": "Todas",
     "contrato": ""
 }
-
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -93,12 +91,12 @@ def convertir_excel(dataframe):
         dataframe.to_excel(writer, index=False)
     return output.getvalue()
 
-# ================= FILTROS =================
 def limpiar_filtros():
     st.session_state.proyecto = "Todos"
     st.session_state.empresa = "Todas"
     st.session_state.contrato = ""
 
+# ================= FILTROS =================
 st.subheader("Filtros")
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
@@ -119,28 +117,23 @@ if st.session_state.proyecto != "Todos":
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
-# ================= CONTRATOS =================
-contratos = [""] + sorted(
-    resultado["N° CONTRATO"].dropna().astype(str).unique()
-)
-
+contratos = [""] + sorted(resultado["N° CONTRATO"].dropna().astype(str).unique())
 if st.session_state.contrato not in contratos:
     st.session_state.contrato = ""
 
 with c3:
     st.selectbox("N° CONTRATO", contratos, key="contrato")
 
-st.button("Limpiar Filtros", on_click=limpiar_filtros)
+with c4:
+    st.button("Limpiar", on_click=limpiar_filtros)
 
 # ================= EVOLUCIÓN =================
 if st.session_state.proyecto != "Todos":
     evo = df_evolucion[df_evolucion["PROYECTO"] == st.session_state.proyecto]
-
     if not evo.empty:
         evo = evo.iloc[0]
         st.subheader("Evolución presupuestal del proyecto")
         e1, e2, e3, e4 = st.columns(4)
-
         e1.metric("Original", formato_pesos(evo["ORIGINAL"]))
         e2.metric("Modificado", formato_pesos(evo["MODIFICADO"]))
         e3.metric("Comprometido", formato_pesos(evo["COMPROMETIDO"]))
@@ -158,14 +151,28 @@ agrupado = resultado.groupby(
     "% PENDIENTE POR EJERCER": "first"
 })
 
-# ================= TABLA =================
-hay_filtros = (
-    st.session_state.proyecto != "Todos"
-    or st.session_state.empresa != "Todas"
-    or st.session_state.contrato != ""
-)
+# ================= CONSUMO =================
+st.subheader("Consumo del contrato")
 
-if hay_filtros:
+if st.session_state.contrato:
+    df_contrato = agrupado[
+        agrupado["N° CONTRATO"].astype(str) == st.session_state.contrato
+    ]
+
+    monto_contrato = df_contrato["Importe total (LC)"].iloc[0]
+    monto_ejercido = df_contrato["EJERCIDO"].iloc[0]
+    monto_pendiente = df_contrato["Abrir importe (LC)"].iloc[0]
+
+    a, b, c = st.columns(3)
+    a.metric("Importe del contrato", formato_pesos(monto_contrato))
+    b.metric("Importe ejercido", formato_pesos(monto_ejercido))
+    c.metric("Importe pendiente", formato_pesos(monto_pendiente))
+else:
+    st.info("Selecciona un contrato para ver el consumo")
+
+# ================= TABLA RESULTADOS =================
+if not agrupado.empty:
+    st.subheader("Resultados")
     tabla = agrupado[[
         "N° CONTRATO",
         "DESCRIPCION",
@@ -175,22 +182,14 @@ if hay_filtros:
     ]].copy()
 
     tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
+    st.dataframe(tabla, use_container_width=True, height=420)
 
-    # ===== TABLA RESULTADOS =====
-    if st.session_state.contrato:
-        with st.expander("Resultados del proyecto / empresa", expanded=False):
-            st.dataframe(tabla, use_container_width=True, height=300)
-    else:
-        st.subheader("Resultados")
-        st.dataframe(tabla, use_container_width=True, height=420)
-
-    # ===== CLC =====
-    if st.session_state.contrato:
-        st.subheader("CLC del contrato seleccionado")
-
+# ================= CLC CON LINK =================
+if st.session_state.contrato:
+    with st.expander("Ver CLC del contrato seleccionado"):
         clc_contrato = df_clc[
             df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-        ][["CLC", "MONTO"]].copy()
+        ][["CLC", "MONTO", "LINK_PDF"]].copy()
 
         if clc_contrato.empty:
             st.info("Este contrato no tiene CLC registrados")
@@ -198,23 +197,23 @@ if hay_filtros:
             total_clc = clc_contrato["MONTO"].sum()
             clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
 
-            # altura dinámica
-            filas = len(clc_contrato)
-            altura = min(45 + filas * 35, 500)
-
             st.dataframe(
                 clc_contrato,
                 use_container_width=True,
-                height=altura
+                column_config={
+                    "LINK_PDF": st.column_config.LinkColumn(
+                        "PDF CLC",
+                        display_text="📄 Ver PDF"
+                    )
+                }
             )
 
             st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
 
-    st.divider()
-    st.download_button(
-        "Descargar resultados en Excel",
-        convertir_excel(tabla),
-        file_name="resultados_contratos.xlsx"
-    )
-else:
-    st.info("Aplica un filtro para ver resultados")
+# ================= DESCARGA =================
+st.divider()
+st.download_button(
+    "Descargar resultados en Excel",
+    convertir_excel(tabla),
+    file_name="resultados_contratos.xlsx"
+)
