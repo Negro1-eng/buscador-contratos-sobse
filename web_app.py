@@ -25,6 +25,7 @@ defaults = {
     "empresa": "Todas",
     "contrato": ""
 }
+
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -117,6 +118,7 @@ if st.session_state.proyecto != "Todos":
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
+# ================= CONTRATOS DEPENDIENTES =================
 contratos = [""] + sorted(resultado["N° CONTRATO"].dropna().astype(str).unique())
 if st.session_state.contrato not in contratos:
     st.session_state.contrato = ""
@@ -125,7 +127,7 @@ with c3:
     st.selectbox("N° CONTRATO", contratos, key="contrato")
 
 with c4:
-    st.button("Limpiar", on_click=limpiar_filtros)
+    st.button("Limpiar Filtros", on_click=limpiar_filtros)
 
 # ================= EVOLUCIÓN =================
 if st.session_state.proyecto != "Todos":
@@ -170,50 +172,49 @@ if st.session_state.contrato:
 else:
     st.info("Selecciona un contrato para ver el consumo")
 
-# ================= TABLA RESULTADOS =================
-if not agrupado.empty:
+# ================= TABLA =================
+hay_filtros = (
+    st.session_state.proyecto != "Todos"
+    or st.session_state.empresa != "Todas"
+    or st.session_state.contrato != ""
+)
+
+if hay_filtros:
     st.subheader("Resultados")
-    tabla = agrupado[[
-        "N° CONTRATO",
-        "DESCRIPCION",
-        "Importe total (LC)",
-        "% PAGADO",
-        "% PENDIENTE POR EJERCER"
-    ]].copy()
+    tabla = agrupado[
+        [
+            "N° CONTRATO",
+            "DESCRIPCION",
+            "Importe total (LC)",
+            "% PAGADO",
+            "% PENDIENTE POR EJERCER",
+        ]
+    ].copy()
 
     tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
     st.dataframe(tabla, use_container_width=True, height=420)
 
-# ================= CLC CON LINK =================
-if st.session_state.contrato:
-    with st.expander("Ver CLC del contrato seleccionado"):
-        clc_contrato = df_clc[
-            df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-        ][["CLC", "MONTO", "LINK_PDF"]].copy()
+    # ========== CLC ==========
+    if st.session_state.contrato:
+        with st.expander("Ver CLC del contrato seleccionado"):
+            clc_contrato = df_clc[
+                df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+            ][["CLC", "MONTO"]].copy()
 
-        if clc_contrato.empty:
-            st.info("Este contrato no tiene CLC registrados")
-        else:
-            total_clc = clc_contrato["MONTO"].sum()
-            clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+            if clc_contrato.empty:
+                st.info("Este contrato no tiene CLC registrados")
+            else:
+                total_clc = clc_contrato["MONTO"].sum()
+                clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+                st.dataframe(clc_contrato, use_container_width=True)
+                st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
 
-            st.dataframe(
-                clc_contrato,
-                use_container_width=True,
-                column_config={
-                    "LINK_PDF": st.column_config.LinkColumn(
-                        "PDF CLC",
-                        display_text="📄 Ver PDF"
-                    )
-                }
-            )
+    st.divider()
+    st.download_button(
+        "Descargar resultados en Excel",
+        convertir_excel(tabla),
+        file_name="resultados_contratos.xlsx",
+    )
+else:
+    st.info("Aplica un filtro para ver resultados")
 
-            st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
-
-# ================= DESCARGA =================
-st.divider()
-st.download_button(
-    "Descargar resultados en Excel",
-    convertir_excel(tabla),
-    file_name="resultados_contratos.xlsx"
-)
