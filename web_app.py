@@ -51,16 +51,21 @@ def cargar_datos():
     df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
     df_clc = pd.DataFrame(ws_clc.get_all_records())
 
-    df_contratos.columns = df_contratos.columns.str.strip()
-    df_evolucion.columns = df_evolucion.columns.str.strip()
-    df_clc.columns = df_clc.columns.str.strip()
+    # limpiar encabezados
+    for df_tmp in [df_contratos, df_evolucion, df_clc]:
+        df_tmp.columns = (
+            df_tmp.columns
+            .str.strip()
+            .str.replace(r"\s+", "_", regex=True)
+        )
 
     return df_contratos, df_evolucion, df_clc
+
 
 df, df_evolucion, df_clc = cargar_datos()
 
 # ================= NORMALIZAR NUMÉRICOS =================
-for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
+for col in ["Importe_total_(LC)", "EJERCIDO", "Abrir_importe_(LC)"]:
     df[col] = (
         df[col].astype(str)
         .str.replace("$", "", regex=False)
@@ -83,6 +88,10 @@ df_clc["MONTO"] = (
 )
 df_clc["MONTO"] = pd.to_numeric(df_clc["MONTO"], errors="coerce").fillna(0)
 
+# asegurar columna LINK_PDF
+if "LINK_PDF" not in df_clc.columns:
+    df_clc["LINK_PDF"] = ""
+
 # ================= FUNCIONES =================
 def formato_pesos(valor):
     return f"$ {valor:,.2f}"
@@ -103,7 +112,7 @@ st.subheader("Filtros")
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
 with c1:
-    proyectos = ["Todos"] + sorted(df["DESC PROYECTO"].dropna().unique())
+    proyectos = ["Todos"] + sorted(df["DESC_PROYECTO"].dropna().unique())
     st.selectbox("DESC PROGRAMA", proyectos, key="proyecto")
 
 with c2:
@@ -114,14 +123,14 @@ with c2:
 resultado = df.copy()
 
 if st.session_state.proyecto != "Todos":
-    resultado = resultado[resultado["DESC PROYECTO"] == st.session_state.proyecto]
+    resultado = resultado[resultado["DESC_PROYECTO"] == st.session_state.proyecto]
 
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
 # ================= CONTRATOS =================
 contratos = [""] + sorted(
-    resultado["N° CONTRATO"].dropna().astype(str).unique()
+    resultado["N°_CONTRATO"].dropna().astype(str).unique()
 )
 
 if st.session_state.contrato not in contratos:
@@ -141,90 +150,6 @@ if st.session_state.proyecto != "Todos":
         st.subheader("Evolución presupuestal del proyecto")
         e1, e2, e3, e4 = st.columns(4)
 
-        e1.metric("Original", formato_pesos(evo["ORIGINAL"]))
-        e2.metric("Modificado", formato_pesos(evo["MODIFICADO"]))
-        e3.metric("Comprometido", formato_pesos(evo["COMPROMETIDO"]))
-        e4.metric("Ejercido", formato_pesos(evo["EJERCIDO"]))
+        e1.metric("Original"
 
-# ================= AGRUPAR =================
-agrupado = resultado.groupby(
-    ["N° CONTRATO", "DESCRIPCION"],
-    as_index=False
-).agg({
-    "Importe total (LC)": "max",
-    "EJERCIDO": "sum",
-    "Abrir importe (LC)": "sum",
-    "% PAGADO": "first",
-    "% PENDIENTE POR EJERCER": "first"
-})
 
-# ================= RESULTADOS + CLC =================
-hay_filtros = (
-    st.session_state.proyecto != "Todos"
-    or st.session_state.empresa != "Todas"
-    or st.session_state.contrato != ""
-)
-
-if hay_filtros:
-    tabla = agrupado[[
-        "N° CONTRATO",
-        "DESCRIPCION",
-        "Importe total (LC)",
-        "% PAGADO",
-        "% PENDIENTE POR EJERCER"
-    ]].copy()
-
-    tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
-
-    if st.session_state.contrato:
-        with st.expander("Resultados del proyecto / empresa", expanded=False):
-            st.dataframe(tabla, use_container_width=True, height=300)
-    else:
-        st.subheader("Resultados")
-        st.dataframe(tabla, use_container_width=True, height=420)
-
-    # ===== CLC =====
-    if st.session_state.contrato:
-        st.subheader("CLC del contrato seleccionado")
-
-        clc_contrato = df_clc[
-            df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-        ][["CLC", "MONTO", "LINK_PDF"]].copy()
-
-        if clc_contrato.empty:
-            st.info("Este contrato no tiene CLC registrados")
-        else:
-            total_clc = clc_contrato["MONTO"].sum()
-            clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
-
-            clc_contrato["PDF"] = clc_contrato["LINK_PDF"].apply(
-                lambda x: f"[📄 Ver PDF]({x})" if x else ""
-            )
-
-            clc_contrato = clc_contrato[["CLC", "MONTO", "PDF"]]
-
-            filas = len(clc_contrato)
-            altura = min(45 + filas * 35, 500)
-
-            st.dataframe(
-                clc_contrato,
-                use_container_width=True,
-                height=altura,
-                column_config={
-                    "PDF": st.column_config.MarkdownColumn(
-                        "PDF",
-                        help="Abrir CLC en PDF"
-                    )
-                }
-            )
-
-            st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
-
-    st.divider()
-    st.download_button(
-        "Descargar resultados en Excel",
-        convertir_excel(tabla),
-        file_name="resultados_contratos.xlsx"
-    )
-else:
-    st.info("Aplica un filtro para ver resultados")
