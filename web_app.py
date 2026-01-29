@@ -205,36 +205,39 @@ if hay_filtros:
         st.dataframe(tabla, use_container_width=True, height=420)
 
     # ===== CLC =====
-    if st.session_state.contrato:
-        st.subheader("CLC del contrato seleccionado")
+if st.session_state.contrato:
+    st.subheader("CLC del contrato seleccionado")
 
-        clc_contrato = df_clc[
-            df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-        ][["CLC", "MONTO"]].copy()
+    clc_contrato = df_clc[
+        df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+    ][["CLC", "MONTO", "LINK_PDF"]].copy()
 
-        if clc_contrato.empty:
-            st.info("Este contrato no tiene CLC registrados")
-        else:
-            total_clc = clc_contrato["MONTO"].sum()
-            clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+    if clc_contrato.empty:
+        st.info("Este contrato no tiene CLC registrados")
+    else:
+        total_clc = clc_contrato["MONTO"].sum()
+        clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
 
-            # altura dinámica
-            filas = len(clc_contrato)
-            altura = min(45 + filas * 35, 500)
+        # convertir link en texto clickeable
+        clc_contrato["PDF"] = clc_contrato["LINK_PDF"].apply(
+            lambda x: f"[📄 Ver PDF]({x})" if x else ""
+        )
 
-            st.dataframe(
-                clc_contrato,
-                use_container_width=True,
-                height=altura
-            )
+        clc_contrato = clc_contrato[["CLC", "MONTO", "PDF"]]
 
-            st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+        filas = len(clc_contrato)
+        altura = min(45 + filas * 35, 500)
 
-    st.divider()
-    st.download_button(
-        "Descargar resultados en Excel",
-        convertir_excel(tabla),
-        file_name="resultados_contratos.xlsx"
-    )
-else:
-    st.info("Aplica un filtro para ver resultados")
+        st.dataframe(
+            clc_contrato,
+            use_container_width=True,
+            height=altura,
+            column_config={
+                "PDF": st.column_config.MarkdownColumn(
+                    "PDF",
+                    help="Abrir CLC en PDF"
+                )
+            }
+        )
+
+        st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
