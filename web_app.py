@@ -158,7 +158,7 @@ agrupado = resultado.groupby(
     "% PENDIENTE POR EJERCER": "first"
 })
 
-# ================= RESULTADOS + CLC =================
+# ================= TABLA =================
 hay_filtros = (
     st.session_state.proyecto != "Todos"
     or st.session_state.empresa != "Todas"
@@ -176,6 +176,7 @@ if hay_filtros:
 
     tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
 
+    # ===== TABLA RESULTADOS =====
     if st.session_state.contrato:
         with st.expander("Resultados del proyecto / empresa", expanded=False):
             st.dataframe(tabla, use_container_width=True, height=300)
@@ -189,7 +190,7 @@ if hay_filtros:
 
         clc_contrato = df_clc[
             df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-        ][["CLC", "MONTO", "LINK_PDF"]].copy()
+        ][["CLC", "MONTO"]].copy()
 
         if clc_contrato.empty:
             st.info("Este contrato no tiene CLC registrados")
@@ -197,25 +198,14 @@ if hay_filtros:
             total_clc = clc_contrato["MONTO"].sum()
             clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
 
-            clc_contrato["PDF"] = clc_contrato["LINK_PDF"].apply(
-                lambda x: f"[📄 Ver PDF]({x})" if x else ""
-            )
-
-            clc_contrato = clc_contrato[["CLC", "MONTO", "PDF"]]
-
+            # altura dinámica
             filas = len(clc_contrato)
             altura = min(45 + filas * 35, 500)
 
             st.dataframe(
                 clc_contrato,
                 use_container_width=True,
-                height=altura,
-                column_config={
-                    "PDF": st.column_config.MarkdownColumn(
-                        "PDF",
-                        help="Abrir CLC en PDF"
-                    )
-                }
+                height=altura
             )
 
             st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
@@ -228,5 +218,3 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
-
-   
