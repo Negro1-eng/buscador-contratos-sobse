@@ -202,7 +202,7 @@ if hay_filtros:
 
     # ========== CLC ==========
     if st.session_state.contrato:
-        with st.expander("📄 Ver CLC del contrato seleccionado"):
+        with st.expander("Ver CLC del contrato seleccionado"):
             clc_contrato = df_clc[
                 df_clc["CONTRATO"].astype(str) == st.session_state.contrato
             ][["CLC", "MONTO"]].copy()
@@ -216,7 +216,7 @@ if hay_filtros:
                 st.dataframe(clc_contrato, use_container_width=True)
 
                 st.markdown(
-                    f"### 💰 **Total CLC:** {formato_pesos(total_clc)}"
+                    f"### **Total CLC:** {formato_pesos(total_clc)}"
                 )
 
     st.divider()
@@ -227,3 +227,4 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
