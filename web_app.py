@@ -57,7 +57,6 @@ def cargar_datos():
 
     return df_contratos, df_evolucion, df_clc
 
-
 df, df_evolucion, df_clc = cargar_datos()
 
 # ================= NORMALIZAR NUMÉRICOS =================
@@ -120,7 +119,7 @@ if st.session_state.proyecto != "Todos":
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
-# ================= CONTRATOS DEPENDIENTES =================
+# ================= CONTRATOS =================
 contratos = [""] + sorted(
     resultado["N° CONTRATO"].dropna().astype(str).unique()
 )
@@ -159,26 +158,7 @@ agrupado = resultado.groupby(
     "% PENDIENTE POR EJERCER": "first"
 })
 
-# ================= CONSUMO =================
-st.subheader("Consumo del contrato")
-
-if st.session_state.contrato:
-    df_contrato = agrupado[
-        agrupado["N° CONTRATO"].astype(str) == st.session_state.contrato
-    ]
-
-    monto_contrato = df_contrato["Importe total (LC)"].iloc[0]
-    monto_ejercido = df_contrato["EJERCIDO"].iloc[0]
-    monto_pendiente = df_contrato["Abrir importe (LC)"].iloc[0]
-
-    a, b, c = st.columns(3)
-    a.metric("Importe del contrato", formato_pesos(monto_contrato))
-    b.metric("Importe ejercido", formato_pesos(monto_ejercido))
-    c.metric("Importe pendiente", formato_pesos(monto_pendiente))
-else:
-    st.info("Selecciona un contrato para ver el consumo")
-
-# ================= TABLA =================
+# ================= RESULTADOS + CLC =================
 hay_filtros = (
     st.session_state.proyecto != "Todos"
     or st.session_state.empresa != "Todas"
@@ -196,7 +176,6 @@ if hay_filtros:
 
     tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
 
-    # ===== TABLA RESULTADOS =====
     if st.session_state.contrato:
         with st.expander("Resultados del proyecto / empresa", expanded=False):
             st.dataframe(tabla, use_container_width=True, height=300)
@@ -205,39 +184,47 @@ if hay_filtros:
         st.dataframe(tabla, use_container_width=True, height=420)
 
     # ===== CLC =====
-if st.session_state.contrato:
-    st.subheader("CLC del contrato seleccionado")
+    if st.session_state.contrato:
+        st.subheader("CLC del contrato seleccionado")
 
-    clc_contrato = df_clc[
-        df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-    ][["CLC", "MONTO", "LINK_PDF"]].copy()
+        clc_contrato = df_clc[
+            df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+        ][["CLC", "MONTO", "LINK_PDF"]].copy()
 
-    if clc_contrato.empty:
-        st.info("Este contrato no tiene CLC registrados")
-    else:
-        total_clc = clc_contrato["MONTO"].sum()
-        clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+        if clc_contrato.empty:
+            st.info("Este contrato no tiene CLC registrados")
+        else:
+            total_clc = clc_contrato["MONTO"].sum()
+            clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
 
-        # convertir link en texto clickeable
-        clc_contrato["PDF"] = clc_contrato["LINK_PDF"].apply(
-            lambda x: f"[📄 Ver PDF]({x})" if x else ""
-        )
+            clc_contrato["PDF"] = clc_contrato["LINK_PDF"].apply(
+                lambda x: f"[📄 Ver PDF]({x})" if x else ""
+            )
 
-        clc_contrato = clc_contrato[["CLC", "MONTO", "PDF"]]
+            clc_contrato = clc_contrato[["CLC", "MONTO", "PDF"]]
 
-        filas = len(clc_contrato)
-        altura = min(45 + filas * 35, 500)
+            filas = len(clc_contrato)
+            altura = min(45 + filas * 35, 500)
 
-        st.dataframe(
-            clc_contrato,
-            use_container_width=True,
-            height=altura,
-            column_config={
-                "PDF": st.column_config.MarkdownColumn(
-                    "PDF",
-                    help="Abrir CLC en PDF"
-                )
-            }
-        )
+            st.dataframe(
+                clc_contrato,
+                use_container_width=True,
+                height=altura,
+                column_config={
+                    "PDF": st.column_config.MarkdownColumn(
+                        "PDF",
+                        help="Abrir CLC en PDF"
+                    )
+                }
+            )
 
-        st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+            st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
+    st.divider()
+    st.download_button(
+        "Descargar resultados en Excel",
+        convertir_excel(tabla),
+        file_name="resultados_contratos.xlsx"
+    )
+else:
+    st.info("Aplica un filtro para ver resultados")
