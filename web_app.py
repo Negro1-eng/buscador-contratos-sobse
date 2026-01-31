@@ -214,12 +214,16 @@ if hay_filtros:
             clc_contrato["PDF"] = clc_contrato["PDF"].apply(
                 lambda x: f"[Ver PDF]({x})" if pd.notna(x) and x != "" else ""
             )
-
-            st.markdown(
-                clc_contrato.to_markdown(index=False),
-                unsafe_allow_html=True
-            )
-
+        st.dataframe(
+    clc_contrato,
+    use_container_width=True,
+    column_config={
+        "PDF": st.column_config.LinkColumn(
+            "PDF",
+            display_text="Ver PDF"
+        )
+    }
+)            
             st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
 
     st.divider()
@@ -230,3 +234,4 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
+
