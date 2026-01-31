@@ -190,7 +190,6 @@ if hay_filtros:
 
     tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
 
-    # ===== TABLA RESULTADOS =====
     if st.session_state.contrato:
         with st.expander("Resultados del proyecto / empresa", expanded=False):
             st.dataframe(tabla, use_container_width=True, height=300)
@@ -198,13 +197,13 @@ if hay_filtros:
         st.subheader("Resultados")
         st.dataframe(tabla, use_container_width=True, height=420)
 
-    # ===== CLC =====
+    # ================= CLC =================
     if st.session_state.contrato:
         st.subheader("CLC del contrato seleccionado")
 
         clc_contrato = df_clc[
             df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-        ][["CLC", "MONTO"]].copy()
+        ][["CLC", "MONTO", "PDF"]].copy()
 
         if clc_contrato.empty:
             st.info("Este contrato no tiene CLC registrados")
@@ -212,14 +211,13 @@ if hay_filtros:
             total_clc = clc_contrato["MONTO"].sum()
             clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
 
-            # altura dinámica
-            filas = len(clc_contrato)
-            altura = min(45 + filas * 35, 500)
+            clc_contrato["PDF"] = clc_contrato["PDF"].apply(
+                lambda x: f"[Ver PDF]({x})" if pd.notna(x) and x != "" else ""
+            )
 
-            st.dataframe(
-                clc_contrato,
-                use_container_width=True,
-                height=altura
+            st.markdown(
+                clc_contrato.to_markdown(index=False),
+                unsafe_allow_html=True
             )
 
             st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
@@ -232,6 +230,3 @@ if hay_filtros:
     )
 else:
     st.info("Aplica un filtro para ver resultados")
-
-
-
