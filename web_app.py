@@ -197,41 +197,29 @@ if hay_filtros:
         st.subheader("Resultados")
         st.dataframe(tabla, use_container_width=True, height=420)
 
-    # ================= CLC =================
-    if st.session_state.contrato:
-        st.subheader("CLC del contrato seleccionado")
+   # ================= CLC =================
+if st.session_state.contrato:
+    st.subheader("CLC del contrato seleccionado")
 
-        clc_contrato = df_clc[
-            df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-        ][["CLC", "MONTO", "PDF"]].copy()
+    clc_contrato = df_clc[
+        df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+    ][["CLC", "MONTO", "PDF"]].copy()
 
-        if clc_contrato.empty:
-            st.info("Este contrato no tiene CLC registrados")
-        else:
-            total_clc = clc_contrato["MONTO"].sum()
-            clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+    if clc_contrato.empty:
+        st.info("Este contrato no tiene CLC registrados")
+    else:
+        total_clc = clc_contrato["MONTO"].sum()
+        clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
 
-            clc_contrato["PDF"] = clc_contrato["PDF"].apply(
-                lambda x: f"[Ver PDF]({x})" if pd.notna(x) and x != "" else ""
-            )
         st.dataframe(
-    clc_contrato,
-    use_container_width=True,
-    column_config={
-        "PDF": st.column_config.LinkColumn(
-            "PDF",
-            display_text="Ver PDF"
+            clc_contrato,
+            use_container_width=True,
+            column_config={
+                "PDF": st.column_config.LinkColumn(
+                    "PDF",
+                    display_text="Ver PDF"
+                )
+            }
         )
-    }
-)            
-            st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
 
-    st.divider()
-    st.download_button(
-        "Descargar resultados en Excel",
-        convertir_excel(tabla),
-        file_name="resultados_contratos.xlsx"
-    )
-else:
-    st.info("Aplica un filtro para ver resultados")
-
+        st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
