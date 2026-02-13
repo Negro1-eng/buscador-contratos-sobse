@@ -35,7 +35,44 @@ ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
 
 @st.cache_data
 def cargar_datos():
-    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+@st.cache_data
+def cargar_pdfs_drive():
+    from googleapiclient.discovery import build
+
+    scopes = [
+        "https://www.googleapis.com/auth/drive.readonly"
+    ]
+
+    creds = Credentials.from_service_account_info(
+        st.secrets["google_service_account"],
+        scopes=scopes
+    )
+
+    service = build("drive", "v3", credentials=creds)
+
+    folder_id = "1MQtSIS1l-nL0KLLgL46tmo83FJtq4XZJ"
+
+    results = service.files().list(
+        q=f"'{folder_id}' in parents and mimeType='application/pdf'",
+        fields="files(id, name)",
+        pageSize=1000
+    ).execute()
+
+    files = results.get("files", [])
+
+    pdf_dict = {}
+
+    for file in files:
+        nombre = file["name"]
+        file_id = file["id"]
+        link = f"https://drive.google.com/file/d/{file_id}/view"
+        pdf_dict[nombre.lower()] = link
+
+    return pdf_dict
+    
+    scopes = [
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/drive.readonly"]
     creds = Credentials.from_service_account_info(
         st.secrets["google_service_account"],
         scopes=scopes
@@ -57,7 +94,7 @@ def cargar_datos():
     return df_contratos, df_evolucion, df_clc
 
 df, df_evolucion, df_clc = cargar_datos()
-
+pdf_drive = cargar_pdfs_drive()
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
     df[col] = (
@@ -197,19 +234,26 @@ if hay_filtros:
         st.subheader("Resultados")
         st.dataframe(tabla, use_container_width=True, height=420)
 
-   # ================= CLC =================
+  # ================= CLC =================
 if st.session_state.contrato:
     st.subheader("CLC del contrato seleccionado")
 
     clc_contrato = df_clc[
         df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-    ][["CLC", "MONTO", "PDF"]].copy()
+    ][["CLC", "MONTO"]].copy()
 
     if clc_contrato.empty:
         st.info("Este contrato no tiene CLC registrados")
     else:
         total_clc = clc_contrato["MONTO"].sum()
         clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+
+        # Generar columna PDF automática
+        def buscar_pdf(clc):
+            nombre_archivo = f"{str(clc).strip()}.pdf".lower()
+            return pdf_drive.get(nombre_archivo, None)
+
+        clc_contrato["PDF"] = clc_contrato["CLC"].apply(buscar_pdf)
 
         st.dataframe(
             clc_contrato,
