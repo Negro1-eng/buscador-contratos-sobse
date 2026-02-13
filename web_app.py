@@ -31,10 +31,11 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ================= GOOGLE SHEETS =================
+# ================= IDs =================
 ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
 FOLDER_ID = "1MQtSIS1l-nL0KLLgL46tmo83FJtq4XZJ"
 
+# ================= CARGAR GOOGLE SHEETS =================
 @st.cache_data
 def cargar_datos():
 
@@ -65,6 +66,7 @@ def cargar_datos():
     return df_contratos, df_evolucion, df_clc
 
 
+# ================= CARGAR PDFs DRIVE =================
 @st.cache_data
 def cargar_pdfs_drive():
 
@@ -85,10 +87,21 @@ def cargar_pdfs_drive():
 
     files = results.get("files", [])
 
-    pdf_dict = {
-        file["name"].lower(): f"https://drive.google.com/file/d/{file['id']}/view"
-        for file in files
-    }
+    pdf_dict = {}
+
+    for file in files:
+        nombre = file["name"]
+
+        # 🔥 NORMALIZACIÓN FUERTE
+        nombre_limpio = (
+            nombre.lower()
+            .replace(".pdf", "")
+            .strip()
+            .replace(" ", "")
+        )
+
+        link = f"https://drive.google.com/file/d/{file['id']}/view"
+        pdf_dict[nombre_limpio] = link
 
     return pdf_dict
 
@@ -158,10 +171,28 @@ with c3:
 with c4:
     st.button("Limpiar Filtros", on_click=limpiar_filtros)
 
-# ================= CONSUMO =================
-st.subheader("Consumo del contrato")
+# ================= TABLA DE CONTRATOS =================
+if not st.session_state.contrato:
 
+    tabla = resultado.groupby(
+        ["N° CONTRATO", "DESCRIPCION"],
+        as_index=False
+    ).agg({
+        "Importe total (LC)": "max",
+        "% PAGADO": "first",
+        "% PENDIENTE POR EJERCER": "first"
+    })
+
+    tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
+
+    st.subheader("Resultados")
+    st.dataframe(tabla, use_container_width=True, height=420)
+
+# ================= CONSUMO + CLC =================
 if st.session_state.contrato:
+
+    st.subheader("Consumo del contrato")
+
     df_contrato = resultado[
         resultado["N° CONTRATO"].astype(str) == st.session_state.contrato
     ]
@@ -174,11 +205,8 @@ if st.session_state.contrato:
     a.metric("Importe del contrato", formato_pesos(monto_contrato))
     b.metric("Importe ejercido", formato_pesos(monto_ejercido))
     c.metric("Importe pendiente", formato_pesos(monto_pendiente))
-else:
-    st.info("Selecciona un contrato para ver el consumo")
 
-# ================= CLC =================
-if st.session_state.contrato:
+    # ================= CLC =================
     st.subheader("CLC del contrato seleccionado")
 
     clc_contrato = df_clc[
@@ -192,8 +220,8 @@ if st.session_state.contrato:
         clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
 
         def buscar_pdf(clc):
-            nombre = f"{str(clc).strip()}.pdf".lower()
-            return pdf_drive.get(nombre, None)
+            clave = str(clc).strip().replace(" ", "").lower()
+            return pdf_drive.get(clave, None)
 
         clc_contrato["PDF"] = clc_contrato["CLC"].apply(buscar_pdf)
 
