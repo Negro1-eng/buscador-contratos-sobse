@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 from io import BytesIO
+import re
 
 # ================= CONFIGURACIÓN =================
 st.set_page_config(
@@ -11,12 +13,15 @@ st.set_page_config(
 )
 st.title("Consumo de Contratos")
 
+# ================= ID DRIVE =================
+FOLDER_ID = "1MQtSIS1l-nL0KLLgL46tmo83FJtq4XZJ"
+
 # ================= ACTUALIZAR DATOS =================
 col1, col2 = st.columns([1, 6])
 with col1:
     if st.button("Actualizar datos"):
         st.cache_data.clear()
-        st.success("Datos actualizados desde Google Sheets")
+        st.success("Datos actualizados desde Google Sheets y Drive")
         st.rerun()
 
 # ================= ESTADO =================
@@ -35,13 +40,20 @@ ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
 
 @st.cache_data
 def cargar_datos():
-    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/drive.readonly"
+    ]
+
     creds = Credentials.from_service_account_info(
         st.secrets["google_service_account"],
         scopes=scopes
     )
-    client = gspread.authorize(creds)
 
+    client = gspread.authorize(creds)
+    service = build("drive", "v3", credentials=creds)
+
+    # ----- SHEETS -----
     ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
     ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
     ws_clc = client.open_by_key(ID_SHEET).worksheet("CLC_CONTRATOS")
@@ -54,7 +66,40 @@ def cargar_datos():
     df_evolucion.columns = df_evolucion.columns.str.strip()
     df_clc.columns = df_clc.columns.str.strip()
 
+    # ----- DRIVE (PAGINACIÓN COMPLETA) -----
+    diccionario_links = {}
+    page_token = None
+
+    while True:
+        response = service.files().list(
+            q=f"'{FOLDER_ID}' in parents and mimeType='application/pdf'",
+            fields="nextPageToken, files(id, name)",
+            pageSize=1000,
+            pageToken=page_token
+        ).execute()
+
+        files = response.get("files", [])
+
+        for file in files:
+            nombre = file["name"]
+            file_id = file["id"]
+
+            match = re.search(r"\d+", nombre)
+            if match:
+                clc = match.group()
+                link = f"https://drive.google.com/file/d/{file_id}/view"
+                diccionario_links[clc] = link
+
+        page_token = response.get("nextPageToken", None)
+        if page_token is None:
+            break
+
+    # ----- CRUZAR CLC -----
+    df_clc["CLC"] = df_clc["CLC"].astype(str).str.strip()
+    df_clc["PDF"] = df_clc["CLC"].map(diccionario_links)
+
     return df_contratos, df_evolucion, df_clc
+
 
 df, df_evolucion, df_clc = cargar_datos()
 
@@ -197,7 +242,7 @@ if hay_filtros:
         st.subheader("Resultados")
         st.dataframe(tabla, use_container_width=True, height=420)
 
-    # ================= CLC =================
+# ================= CLC =================
 if st.session_state.contrato:
     st.subheader("CLC del contrato seleccionado")
 
@@ -223,3 +268,5 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
+
