@@ -29,19 +29,44 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
-
 # ================= GOOGLE SHEETS =================
 ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
 
 @st.cache_data
 def cargar_datos():
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/drive.readonly"
+    ]
+
+    creds = Credentials.from_service_account_info(
+        st.secrets["google_service_account"],
+        scopes=scopes
+    )
+
+    client = gspread.authorize(creds)
+
+    ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
+    ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
+    ws_clc = client.open_by_key(ID_SHEET).worksheet("CLC_CONTRATOS")
+
+    df_contratos = pd.DataFrame(ws_contratos.get_all_records())
+    df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
+    df_clc = pd.DataFrame(ws_clc.get_all_records())
+
+    df_contratos.columns = df_contratos.columns.str.strip()
+    df_evolucion.columns = df_evolucion.columns.str.strip()
+    df_clc.columns = df_clc.columns.str.strip()
+
+    return df_contratos, df_evolucion, df_clc
+
+
 @st.cache_data
 def cargar_pdfs_drive():
     from googleapiclient.discovery import build
 
-    scopes = [
-        "https://www.googleapis.com/auth/drive.readonly"
-    ]
+    scopes = ["https://www.googleapis.com/auth/drive.readonly"]
 
     creds = Credentials.from_service_account_info(
         st.secrets["google_service_account"],
@@ -60,41 +85,12 @@ def cargar_pdfs_drive():
 
     files = results.get("files", [])
 
-    pdf_dict = {}
-
-    for file in files:
-        nombre = file["name"]
-        file_id = file["id"]
-        link = f"https://drive.google.com/file/d/{file_id}/view"
-        pdf_dict[nombre.lower()] = link
+    pdf_dict = {
+        file["name"].lower(): f"https://drive.google.com/file/d/{file['id']}/view"
+        for file in files
+    }
 
     return pdf_dict
-    
-    scopes = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly"]
-    creds = Credentials.from_service_account_info(
-        st.secrets["google_service_account"],
-        scopes=scopes
-    )
-    client = gspread.authorize(creds)
-
-    ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
-    ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
-    ws_clc = client.open_by_key(ID_SHEET).worksheet("CLC_CONTRATOS")
-
-    df_contratos = pd.DataFrame(ws_contratos.get_all_records())
-    df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
-    df_clc = pd.DataFrame(ws_clc.get_all_records())
-
-    df_contratos.columns = df_contratos.columns.str.strip()
-    df_evolucion.columns = df_evolucion.columns.str.strip()
-    df_clc.columns = df_clc.columns.str.strip()
-
-    return df_contratos, df_evolucion, df_clc
-
-df, df_evolucion, df_clc = cargar_datos()
-pdf_drive = cargar_pdfs_drive()
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
     df[col] = (
@@ -267,3 +263,4 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
