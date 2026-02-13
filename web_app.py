@@ -180,40 +180,53 @@ hay_filtros = (
 )
 
 if hay_filtros:
-    st.subheader("Resultados")
-    tabla = agrupado[
-        [
-            "N° CONTRATO",
-            "DESCRIPCION",
-            "Importe total (LC)",
-            "% PAGADO",
-            "% PENDIENTE POR EJERCER",
-        ]
-    ].copy()
+    tabla = agrupado[[
+        "N° CONTRATO",
+        "DESCRIPCION",
+        "Importe total (LC)",
+        "% PAGADO",
+        "% PENDIENTE POR EJERCER"
+    ]].copy()
 
     tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
-    st.dataframe(tabla, use_container_width=True, height=420)
 
-    # ========== CLC ==========
     if st.session_state.contrato:
-        with st.expander("Ver CLC del contrato seleccionado"):
-            clc_contrato = df_clc[
-                df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-            ][["CLC", "MONTO"]].copy()
+        with st.expander("Resultados del proyecto / empresa", expanded=False):
+            st.dataframe(tabla, use_container_width=True, height=300)
+    else:
+        st.subheader("Resultados")
+        st.dataframe(tabla, use_container_width=True, height=420)
 
-            if clc_contrato.empty:
-                st.info("Este contrato no tiene CLC registrados")
-            else:
-                total_clc = clc_contrato["MONTO"].sum()
-                clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
-                st.dataframe(clc_contrato, use_container_width=True)
-                st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+    # ================= CLC =================
+    if st.session_state.contrato:
+        st.subheader("CLC del contrato seleccionado")
+
+        clc_contrato = df_clc[
+            df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+        ][["CLC", "MONTO", "PDF"]].copy()
+
+        if clc_contrato.empty:
+            st.info("Este contrato no tiene CLC registrados")
+        else:
+            total_clc = clc_contrato["MONTO"].sum()
+            clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+
+            clc_contrato["PDF"] = clc_contrato["PDF"].apply(
+                lambda x: f"[Ver PDF]({x})" if pd.notna(x) and x != "" else ""
+            )
+
+            st.markdown(
+                clc_contrato.to_markdown(index=False),
+                unsafe_allow_html=True
+            )
+
+            st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
 
     st.divider()
     st.download_button(
         "Descargar resultados en Excel",
         convertir_excel(tabla),
-        file_name="resultados_contratos.xlsx",
+        file_name="resultados_contratos.xlsx"
     )
 else:
     st.info("Aplica un filtro para ver resultados")
