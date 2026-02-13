@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 from io import BytesIO
 
 # ================= CONFIGURACIÓN =================
@@ -17,7 +16,7 @@ col1, col2 = st.columns([1, 6])
 with col1:
     if st.button("Actualizar datos"):
         st.cache_data.clear()
-        st.success("Datos actualizados desde Google Sheets y Drive")
+        st.success("Datos actualizados desde Google Sheets")
         st.rerun()
 
 # ================= ESTADO =================
@@ -33,21 +32,14 @@ for k, v in defaults.items():
 
 # ================= GOOGLE SHEETS =================
 ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
-FOLDER_ID = "1MQtSIS1l-nL0KLLgL46tmo83FJtq4XZJ"
 
 @st.cache_data
 def cargar_datos():
-
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets.readonly",
-        "https://www.googleapis.com/auth/drive.readonly"
-    ]
-
+    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     creds = Credentials.from_service_account_info(
         st.secrets["google_service_account"],
         scopes=scopes
     )
-
     client = gspread.authorize(creds)
 
     ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
@@ -64,38 +56,7 @@ def cargar_datos():
 
     return df_contratos, df_evolucion, df_clc
 
-
-@st.cache_data
-def cargar_pdfs_drive():
-
-    scopes = ["https://www.googleapis.com/auth/drive.readonly"]
-
-    creds = Credentials.from_service_account_info(
-        st.secrets["google_service_account"],
-        scopes=scopes
-    )
-
-    service = build("drive", "v3", credentials=creds)
-
-    results = service.files().list(
-        q=f"'{FOLDER_ID}' in parents and mimeType='application/pdf'",
-        fields="files(id, name)",
-        pageSize=1000
-    ).execute()
-
-    files = results.get("files", [])
-
-    pdf_dict = {
-        file["name"].lower(): f"https://drive.google.com/file/d/{file['id']}/view"
-        for file in files
-    }
-
-    return pdf_dict
-
-
-# ================= CARGA INICIAL =================
 df, df_evolucion, df_clc = cargar_datos()
-pdf_drive = cargar_pdfs_drive()
 
 # ================= NORMALIZAR NUMÉRICOS =================
 for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
@@ -125,6 +86,12 @@ df_clc["MONTO"] = pd.to_numeric(df_clc["MONTO"], errors="coerce").fillna(0)
 def formato_pesos(valor):
     return f"$ {valor:,.2f}"
 
+def convertir_excel(dataframe):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        dataframe.to_excel(writer, index=False)
+    return output.getvalue()
+
 def limpiar_filtros():
     st.session_state.proyecto = "Todos"
     st.session_state.empresa = "Todas"
@@ -142,6 +109,7 @@ with c2:
     empresas = ["Todas"] + sorted(df["EMPRESA"].dropna().unique())
     st.selectbox("EMPRESA", empresas, key="empresa")
 
+# ================= FILTRADO BASE =================
 resultado = df.copy()
 
 if st.session_state.proyecto != "Todos":
@@ -150,7 +118,10 @@ if st.session_state.proyecto != "Todos":
 if st.session_state.empresa != "Todas":
     resultado = resultado[resultado["EMPRESA"] == st.session_state.empresa]
 
+# ================= CONTRATOS DEPENDIENTES =================
 contratos = [""] + sorted(resultado["N° CONTRATO"].dropna().astype(str).unique())
+if st.session_state.contrato not in contratos:
+    st.session_state.contrato = ""
 
 with c3:
     st.selectbox("N° CONTRATO", contratos, key="contrato")
@@ -158,17 +129,41 @@ with c3:
 with c4:
     st.button("Limpiar Filtros", on_click=limpiar_filtros)
 
+# ================= EVOLUCIÓN =================
+if st.session_state.proyecto != "Todos":
+    evo = df_evolucion[df_evolucion["PROYECTO"] == st.session_state.proyecto]
+    if not evo.empty:
+        evo = evo.iloc[0]
+        st.subheader("Evolución presupuestal del proyecto")
+        e1, e2, e3, e4 = st.columns(4)
+        e1.metric("Original", formato_pesos(evo["ORIGINAL"]))
+        e2.metric("Modificado", formato_pesos(evo["MODIFICADO"]))
+        e3.metric("Comprometido", formato_pesos(evo["COMPROMETIDO"]))
+        e4.metric("Ejercido", formato_pesos(evo["EJERCIDO"]))
+
+# ================= AGRUPAR =================
+agrupado = resultado.groupby(
+    ["N° CONTRATO", "DESCRIPCION"],
+    as_index=False
+).agg({
+    "Importe total (LC)": "max",
+    "EJERCIDO": "sum",
+    "Abrir importe (LC)": "sum",
+    "% PAGADO": "first",
+    "% PENDIENTE POR EJERCER": "first"
+})
+
 # ================= CONSUMO =================
 st.subheader("Consumo del contrato")
 
 if st.session_state.contrato:
-    df_contrato = resultado[
-        resultado["N° CONTRATO"].astype(str) == st.session_state.contrato
+    df_contrato = agrupado[
+        agrupado["N° CONTRATO"].astype(str) == st.session_state.contrato
     ]
 
-    monto_contrato = df_contrato["Importe total (LC)"].max()
-    monto_ejercido = df_contrato["EJERCIDO"].sum()
-    monto_pendiente = df_contrato["Abrir importe (LC)"].sum()
+    monto_contrato = df_contrato["Importe total (LC)"].iloc[0]
+    monto_ejercido = df_contrato["EJERCIDO"].iloc[0]
+    monto_pendiente = df_contrato["Abrir importe (LC)"].iloc[0]
 
     a, b, c = st.columns(3)
     a.metric("Importe del contrato", formato_pesos(monto_contrato))
@@ -177,36 +172,48 @@ if st.session_state.contrato:
 else:
     st.info("Selecciona un contrato para ver el consumo")
 
-# ================= CLC =================
-if st.session_state.contrato:
-    st.subheader("CLC del contrato seleccionado")
+# ================= TABLA =================
+hay_filtros = (
+    st.session_state.proyecto != "Todos"
+    or st.session_state.empresa != "Todas"
+    or st.session_state.contrato != ""
+)
 
-    clc_contrato = df_clc[
-        df_clc["CONTRATO"].astype(str) == st.session_state.contrato
-    ][["CLC", "MONTO"]].copy()
+if hay_filtros:
+    st.subheader("Resultados")
+    tabla = agrupado[
+        [
+            "N° CONTRATO",
+            "DESCRIPCION",
+            "Importe total (LC)",
+            "% PAGADO",
+            "% PENDIENTE POR EJERCER",
+        ]
+    ].copy()
 
-    if clc_contrato.empty:
-        st.info("Este contrato no tiene CLC registrados")
-    else:
-        total_clc = clc_contrato["MONTO"].sum()
-        clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+    tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
+    st.dataframe(tabla, use_container_width=True, height=420)
 
-        def buscar_pdf(clc):
-            nombre = f"{str(clc).strip()}.pdf".lower()
-            return pdf_drive.get(nombre, None)
+    # ========== CLC ==========
+    if st.session_state.contrato:
+        with st.expander("Ver CLC del contrato seleccionado"):
+            clc_contrato = df_clc[
+                df_clc["CONTRATO"].astype(str) == st.session_state.contrato
+            ][["CLC", "MONTO"]].copy()
 
-        clc_contrato["PDF"] = clc_contrato["CLC"].apply(buscar_pdf)
+            if clc_contrato.empty:
+                st.info("Este contrato no tiene CLC registrados")
+            else:
+                total_clc = clc_contrato["MONTO"].sum()
+                clc_contrato["MONTO"] = clc_contrato["MONTO"].apply(formato_pesos)
+                st.dataframe(clc_contrato, use_container_width=True)
+                st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
 
-        st.dataframe(
-            clc_contrato,
-            use_container_width=True,
-            column_config={
-                "PDF": st.column_config.LinkColumn(
-                    "PDF",
-                    display_text="Ver PDF"
-                )
-            }
-        )
-
-        st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
-
+    st.divider()
+    st.download_button(
+        "Descargar resultados en Excel",
+        convertir_excel(tabla),
+        file_name="resultados_contratos.xlsx",
+    )
+else:
+    st.info("Aplica un filtro para ver resultados")
