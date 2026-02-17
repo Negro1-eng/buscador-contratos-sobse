@@ -6,20 +6,12 @@ from googleapiclient.discovery import build
 from io import BytesIO
 import re
 
-st.markdown("""
-    <style>
-    a.anchor-link {
-        display: none !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # ================= CONFIGURACIÓN =================
 st.set_page_config(
     page_title="Buscador de Consumo de Contratos",
     layout="wide"
 )
-st.title("Consumo de Contratos")
+st.header("Consumo de Contratos", anchor=False)
 
 # ================= ID DRIVE =================
 FOLDER_ID = "1MQtSIS1l-nL0KLLgL46tmo83FJtq4XZJ"
@@ -276,6 +268,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
