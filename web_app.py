@@ -29,7 +29,7 @@ div[data-testid="stStatusWidget"] {
 c1, c2, c3 = st.columns([1, 6, 1], vertical_alignment="center")
 
 with c1:
-    st.image("LOGO CDMX.jpg", width=110)
+    st.image("encabezado.png", width=110)
 
 with c2:
     st.markdown(
@@ -307,6 +307,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
