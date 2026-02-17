@@ -8,16 +8,29 @@ import re
 
 st.markdown("""
 <style>
+
+/* Ocultar botón Share y menú superior */
+header [data-testid="stToolbar"] {
+    display: none !important;
+}
+
+/* Ocultar footer y badge */
+footer {
+    visibility: hidden;
+}
+
+/* Ocultar decoración inferior derecha (Hosted with Streamlit) */
 [data-testid="stDecoration"] {
     display: none !important;
 }
 
-footer {
-    visibility: hidden;
+/* Ocultar botón Manage app */
+button[kind="secondary"] {
+    display: none !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
-
 
 # ================= CONFIGURACIÓN =================
 st.set_page_config(
@@ -281,6 +294,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
