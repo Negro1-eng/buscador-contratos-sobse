@@ -1,3 +1,10 @@
+st.markdown("""
+    <style>
+    a.anchor-link {
+        display: none !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 import streamlit as st
 import pandas as pd
 import gspread
@@ -268,6 +275,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
