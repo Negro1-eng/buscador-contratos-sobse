@@ -25,6 +25,25 @@ div[data-testid="stStatusWidget"] {
 
 </style>
 """, unsafe_allow_html=True)
+# ================= ENCABEZADO =================
+c1, c2, c3 = st.columns([1, 6, 1], vertical_alignment="center")
+
+with c1:
+    st.image("LOGO CDMX.jpg", width=110)
+
+with c2:
+    st.markdown(
+        """
+        <div style="text-align:center">
+            <h2 style="margin-bottom:0"> Secretaria de Obras y Servicios </h2>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with c3:
+    st.image("sobse.svg", width=110)
+
 
 # ================= CONFIGURACIÓN =================
 st.set_page_config(
@@ -288,6 +307,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
