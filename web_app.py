@@ -42,7 +42,7 @@ with c2:
     )
 
 with c3:
-    st.image("encabezado.png", width=250)
+    st.image("encabezado.png", width=350)
 
 
 # ================= CONFIGURACIÓN =================
@@ -307,6 +307,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
