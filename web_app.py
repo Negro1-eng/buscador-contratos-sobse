@@ -9,23 +9,17 @@ import re
 st.markdown("""
 <style>
 
-/* Ocultar botón Share y menú superior */
-header [data-testid="stToolbar"] {
-    display: none !important;
-}
+/* Oculta barra superior (Share, GitHub, etc.) */
+header {visibility: hidden;}
 
-/* Ocultar footer y badge */
-footer {
-    visibility: hidden;
-}
+/* Oculta footer */
+footer {visibility: hidden;}
 
-/* Ocultar decoración inferior derecha (Hosted with Streamlit) */
-[data-testid="stDecoration"] {
-    display: none !important;
-}
+/* Oculta badge inferior */
+[data-testid="stDecoration"] {display: none !important;}
 
-/* Ocultar botón Manage app */
-button[kind="secondary"] {
+/* Oculta botón flotante Manage app */
+div[data-testid="stStatusWidget"] {
     display: none !important;
 }
 
