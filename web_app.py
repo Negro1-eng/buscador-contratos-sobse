@@ -143,7 +143,7 @@ def limpiar_filtros():
     st.session_state.contrato = ""
 
 # ================= FILTROS =================
-st.subheader("Filtros")
+st.header("Filtros", anchor=False)
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
 
 with c1:
@@ -268,6 +268,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
