@@ -6,6 +6,19 @@ from googleapiclient.discovery import build
 from io import BytesIO
 import re
 
+st.markdown("""
+<style>
+[data-testid="stDecoration"] {
+    display: none !important;
+}
+
+footer {
+    visibility: hidden;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 # ================= CONFIGURACIÓN =================
 st.set_page_config(
     page_title="Buscador de Consumo de Contratos",
@@ -268,6 +281,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
