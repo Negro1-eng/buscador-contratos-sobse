@@ -270,7 +270,7 @@ if hay_filtros:
 
 # ================= CLC =================
 if st.session_state.contrato:
-    st.subheader("CLC del contrato seleccionado")
+    st.header("CLC DEL CONTRATO", anchor=False)
 
     clc_contrato = df_clc[
         df_clc["CONTRATO"].astype(str) == st.session_state.contrato
@@ -294,6 +294,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
