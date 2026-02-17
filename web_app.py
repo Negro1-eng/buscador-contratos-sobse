@@ -212,7 +212,7 @@ agrupado = resultado.groupby(
 })
 
 # ================= CONSUMO =================
-st.subheader("Consumo del contrato")
+st.header("Consumo del Contrato", anchor=False)
 
 if st.session_state.contrato:
     df_contrato = agrupado[
@@ -281,6 +281,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
