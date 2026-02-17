@@ -26,23 +26,23 @@ div[data-testid="stStatusWidget"] {
 </style>
 """, unsafe_allow_html=True)
 # ================= ENCABEZADO =================
-c1, c2, c3 = st.columns([1, 6, 1], vertical_alignment="center")
+#c1, c2, c3 = st.columns([1, 6, 1], vertical_alignment="center")
 
-with c1:
-    st.image("sobse.svg", width=200)
+# with c1:
+#   st.image("sobse.svg", width=200)
 
-with c2:
-    st.markdown(
-        """
-        <div style="text-align:center">
-            <h2 style="margin-bottom:0"> Secretaria de Obras y Servicios </h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# with c2:
+  #  st.markdown(
+   #     """
+    #    <div style="text-align:center">
+     #       <h2 style="margin-bottom:0"> Secretaria de Obras y Servicios </h2>
+      #  </div>
+       # """,
+#        unsafe_allow_html=True
+ #   )
 
-with c3:
-    st.image("encabezado.png", width=350)
+#  with c3:
+  #  st.image("encabezado.png", width=350) 
 
 
 # ================= CONFIGURACIÓN =================
@@ -307,6 +307,7 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
 
