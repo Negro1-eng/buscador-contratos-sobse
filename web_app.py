@@ -3,29 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from io import BytesIO
 import re
-
-# ================= ESTILOS =================
-st.markdown("""
-<style>
-
-/* Oculta barra superior (Share, GitHub, etc.) */
-header {visibility: hidden;}
-
-/* Oculta footer */
-footer {visibility: hidden;}
-
-/* Oculta badge inferior */
-[data-testid="stDecoration"] {display: none !important;}
-
-/* Oculta botón flotante Manage app */
-div[data-testid="stStatusWidget"] {
-    display: none !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
 
 # ================= CONFIGURACIÓN =================
 st.set_page_config(
@@ -33,21 +11,51 @@ st.set_page_config(
     layout="wide"
 )
 
+# ================= ESTILOS =================
+st.markdown("""
+<style>
+header {visibility: hidden;}
+footer {visibility: hidden;}
+[data-testid="stDecoration"] {display: none !important;}
+div[data-testid="stStatusWidget"] {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
 st.header("Consumo de Contratos", anchor=False)
 
-# ================= ID DRIVE =================
-FOLDER_ID = "1MQtSIS1l-nL0KLLgL46tmo83FJtq4XZJ"
+# ================= CONFIGURACIÓN POR AÑO =================
 
-# ================= ACTUALIZAR DATOS =================
+CONFIG_ANIOS = {
+    "2025": {
+        "sheet_id": "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4",
+        "folder_id": "1MQtSIS1l-nL0KLLgL46tmo83FJtq4XZJ"
+    },
+    "2026": {
+        "sheet_id": "109Jew5EPHYfwpdWKJYG2N2jRDRU502eVWYTOuM-igdc",
+        "folder_id": "1VEFnedYn74acbepMsLu4JILNrLKcstdD"
+    }
+}
+
+# ================= SELECTOR DE AÑO =================
+
+st.header("Ejercicio fiscal", anchor=False)
+
+anio = st.selectbox(
+    "Selecciona el año",
+    list(CONFIG_ANIOS.keys())
+)
+
+# ================= BOTÓN ACTUALIZAR =================
+
 col1, col2 = st.columns([1, 6])
-
 with col1:
     if st.button("Actualizar datos"):
         st.cache_data.clear()
-        st.success("Datos actualizados desde Google Sheets y Drive")
+        st.success(f"Datos actualizados del ejercicio {anio}")
         st.rerun()
 
 # ================= ESTADO =================
+
 defaults = {
     "proyecto": "Todos",
     "empresa": "Todas",
@@ -58,11 +66,13 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ================= GOOGLE SHEETS =================
-ID_SHEET = "1q2cvx9FD1CW8XP_kZpsFvfKtu4QdrJPqKAZuueHRIW4"
+# ================= CARGA DE DATOS =================
 
 @st.cache_data
-def cargar_datos():
+def cargar_datos(anio):
+
+    sheet_id = CONFIG_ANIOS[anio]["sheet_id"]
+    folder_id = CONFIG_ANIOS[anio]["folder_id"]
 
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -77,10 +87,10 @@ def cargar_datos():
     client = gspread.authorize(creds)
     service = build("drive", "v3", credentials=creds)
 
-    # ----- SHEETS -----
-    ws_contratos = client.open_by_key(ID_SHEET).get_worksheet(0)
-    ws_evolucion = client.open_by_key(ID_SHEET).worksheet("Evolucion")
-    ws_clc = client.open_by_key(ID_SHEET).worksheet("CLC_CONTRATOS")
+    # -------- SHEETS --------
+    ws_contratos = client.open_by_key(sheet_id).get_worksheet(0)
+    ws_evolucion = client.open_by_key(sheet_id).worksheet("Evolucion")
+    ws_clc = client.open_by_key(sheet_id).worksheet("CLC_CONTRATOS")
 
     df_contratos = pd.DataFrame(ws_contratos.get_all_records())
     df_evolucion = pd.DataFrame(ws_evolucion.get_all_records())
@@ -90,13 +100,13 @@ def cargar_datos():
     df_evolucion.columns = df_evolucion.columns.str.strip()
     df_clc.columns = df_clc.columns.str.strip()
 
-    # ----- DRIVE -----
+    # -------- DRIVE --------
     diccionario_links = {}
     page_token = None
 
     while True:
         response = service.files().list(
-            q=f"'{FOLDER_ID}' in parents and mimeType='application/pdf'",
+            q=f"'{folder_id}' in parents and mimeType='application/pdf'",
             fields="nextPageToken, files(id, name)",
             pageSize=1000,
             pageToken=page_token
@@ -118,40 +128,33 @@ def cargar_datos():
         if page_token is None:
             break
 
-    # ----- CRUZAR CLC -----
     df_clc["CLC"] = df_clc["CLC"].astype(str).str.strip()
     df_clc["PDF"] = df_clc["CLC"].map(diccionario_links)
 
     return df_contratos, df_evolucion, df_clc
 
 
-df, df_evolucion, df_clc = cargar_datos()
+df, df_evolucion, df_clc = cargar_datos(anio)
 
 # ================= NORMALIZAR NUMÉRICOS =================
-for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
-    df[col] = (
-        df[col].astype(str)
+
+def limpiar_monto(col):
+    return (
+        col.astype(str)
         .str.replace("$", "", regex=False)
         .str.replace(",", "", regex=False)
     )
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+for col in ["Importe total (LC)", "EJERCIDO", "Abrir importe (LC)"]:
+    df[col] = pd.to_numeric(limpiar_monto(df[col]), errors="coerce").fillna(0)
 
 for col in ["ORIGINAL", "MODIFICADO", "COMPROMETIDO", "EJERCIDO"]:
-    df_evolucion[col] = (
-        df_evolucion[col].astype(str)
-        .str.replace("$", "", regex=False)
-        .str.replace(",", "", regex=False)
-    )
-    df_evolucion[col] = pd.to_numeric(df_evolucion[col], errors="coerce").fillna(0)
+    df_evolucion[col] = pd.to_numeric(limpiar_monto(df_evolucion[col]), errors="coerce").fillna(0)
 
-df_clc["MONTO"] = (
-    df_clc["MONTO"].astype(str)
-    .str.replace("$", "", regex=False)
-    .str.replace(",", "", regex=False)
-)
-df_clc["MONTO"] = pd.to_numeric(df_clc["MONTO"], errors="coerce").fillna(0)
+df_clc["MONTO"] = pd.to_numeric(limpiar_monto(df_clc["MONTO"]), errors="coerce").fillna(0)
 
 # ================= FUNCIONES =================
+
 def formato_pesos(valor):
     return f"$ {valor:,.2f}"
 
@@ -161,6 +164,7 @@ def limpiar_filtros():
     st.session_state.contrato = ""
 
 # ================= FILTROS =================
+
 st.header("Filtros", anchor=False)
 
 c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
@@ -193,6 +197,7 @@ with c4:
     st.button("Limpiar Filtros", on_click=limpiar_filtros)
 
 # ================= EVOLUCIÓN =================
+
 if st.session_state.proyecto != "Todos":
 
     evo = df_evolucion[df_evolucion["PROYECTO"] == st.session_state.proyecto]
@@ -209,6 +214,7 @@ if st.session_state.proyecto != "Todos":
         e4.metric("Ejercido", formato_pesos(evo["EJERCIDO"]))
 
 # ================= AGRUPAR =================
+
 agrupado = resultado.groupby(
     ["N° CONTRATO", "DESCRIPCION"],
     as_index=False
@@ -221,6 +227,7 @@ agrupado = resultado.groupby(
 })
 
 # ================= CONSUMO =================
+
 st.header("Consumo del Contrato", anchor=False)
 
 if st.session_state.contrato:
@@ -241,33 +248,8 @@ if st.session_state.contrato:
 else:
     st.info("Selecciona un contrato para ver el consumo")
 
-# ================= TABLA =================
-hay_filtros = (
-    st.session_state.proyecto != "Todos"
-    or st.session_state.empresa != "Todas"
-    or st.session_state.contrato != ""
-)
-
-if hay_filtros:
-
-    tabla = agrupado[[
-        "N° CONTRATO",
-        "DESCRIPCION",
-        "Importe total (LC)",
-        "% PAGADO",
-        "% PENDIENTE POR EJERCER"
-    ]].copy()
-
-    tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
-
-    if st.session_state.contrato:
-        with st.expander("Resultados del proyecto / empresa", expanded=False):
-            st.dataframe(tabla, use_container_width=True, height=300)
-    else:
-        st.subheader("Resultados")
-        st.dataframe(tabla, use_container_width=True, height=420)
-
 # ================= CLC =================
+
 if st.session_state.contrato:
 
     st.header("CLC DEL CONTRATO", anchor=False)
@@ -301,3 +283,4 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
