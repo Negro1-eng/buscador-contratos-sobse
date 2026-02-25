@@ -248,6 +248,33 @@ if st.session_state.contrato:
 else:
     st.info("Selecciona un contrato para ver el consumo")
 
+# ================= TABLA =================
+
+if not agrupado.empty:
+
+    tabla = agrupado[[
+        "N° CONTRATO",
+        "DESCRIPCION",
+        "Importe total (LC)",
+        "% PAGADO",
+        "% PENDIENTE POR EJERCER"
+    ]].copy()
+
+    tabla["Importe total (LC)"] = tabla["Importe total (LC)"].apply(formato_pesos)
+
+    # 🔹 Si hay contrato seleccionado → mostrar colapsada
+    if st.session_state.contrato:
+        with st.expander("Resultados del proyecto / empresa", expanded=False):
+            st.dataframe(tabla, use_container_width=True, height=300)
+
+    # 🔹 Si NO hay contrato seleccionado → mostrar normal
+    else:
+        st.subheader("Resultados")
+        st.dataframe(tabla, use_container_width=True, height=420)
+
+else:
+    st.info("No hay contratos disponibles para los filtros seleccionados.")
+
 # ================= CLC =================
 
 if st.session_state.contrato:
@@ -283,4 +310,5 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
