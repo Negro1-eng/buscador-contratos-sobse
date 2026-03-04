@@ -287,6 +287,7 @@ if st.session_state.contrato:
         "CLC",
         "ESTIMACION",
         "Fecha de Compen.",
+        "Doc. Compen.",
         "FACTURA",
         "MONTO",
         "PDF"
@@ -310,5 +311,6 @@ if st.session_state.contrato:
         )
 
         st.markdown(f"### **Total CLC:** {formato_pesos(total_clc)}")
+
 
 
